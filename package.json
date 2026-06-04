@@ -17,6 +17,7 @@
     "build:client": "vite build",
     "build:server": "vite build --config vite.config.server.ts",
     "zip": "node scripts/zip-frontend.mjs",
+    "push": "bash scripts/push.sh",
     "start": "node dist/server/node-build.mjs",
     "test": "vitest --run",
     "format.fix": "prettier --write .",
