@@ -1,9 +1,11 @@
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_colors.dart';
+import '../utils/med_helpers.dart';
 import '../widgets/gradient_header.dart';
 import '../widgets/page_transitions.dart';
 import '../widgets/primary_button.dart';
@@ -32,25 +34,32 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
   double? _userLng;
   String? _locationCity;
   bool _isFindingLocation = false;
-  int _pharmacyTab = 0; // 0 = stock, 1 = garde
+  int _mainSection = 0; // 0 = médicaments, 1 = pharmacies
+  int _pharmacyTab = 1; // 0 = stock, 1 = garde (défaut : de garde)
   bool _loadingPharmacies = false;
+  final TextEditingController _pharmacyFilterController = TextEditingController();
   bool _loading = false;
   bool _aiLoading = false;
   Map<String, dynamic>? _aiResult;
   List<int> _bookmarks = [];
+  Timer? _debounce;
+  static const _maxResults = 40;
 
   @override
   void initState() {
     super.initState();
     _fetchInteractions();
     _loadBookmarks();
-    _onSearchChanged(); // Load all medications initially
     _searchController.addListener(_onSearchChanged);
+    _pharmacyFilterController.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _pharmacyFilterController.dispose();
     super.dispose();
   }
 
@@ -99,35 +108,48 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
     }
   }
 
-  Future<void> _onSearchChanged() async {
+  void _onSearchChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () => _runSearch());
+  }
+
+  Future<void> _runSearch() async {
+    if (!mounted) return;
     final query = _searchController.text.trim();
-    
+
+    if (query.isEmpty) {
+      setState(() {
+        _loading = false;
+        _medications = [];
+        _selectedMed = null;
+        _aiResult = null;
+        _pharmacies = [];
+        _onDutyPharmacies = [];
+      });
+      return;
+    }
+
     setState(() {
       _loading = true;
-      _selectedMed = null; // Reset selected med when searching or clearing
-      _aiResult = null;    // Clear AI result on new search
+      _selectedMed = null;
+      _aiResult = null;
+      _pharmacies = [];
+      _onDutyPharmacies = [];
     });
-
-    // Debounce
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (_searchController.text.trim() != query) return;
 
     try {
       final api = Provider.of<ApiService>(context, listen: false);
       final data = await api.searchMedications(query);
+      final raw = (data['medications'] as List<dynamic>?) ?? [];
+      if (!mounted || _searchController.text.trim() != query) return;
       setState(() {
-        _medications = data['medications'] ?? [];
+        _medications = raw.take(_maxResults).toList();
       });
     } catch (e) {
-      setState(() {
-        _medications = [];
-      });
+      if (!mounted) return;
+      setState(() => _medications = []);
     } finally {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-        });
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -152,14 +174,14 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
     }
   }
 
-  Future<void> _getLocation() async {
+  Future<void> _getLocation({bool silent = false}) async {
     setState(() => _isFindingLocation = true);
     try {
       final pos = await LocationService.getCurrentPosition();
       if (pos == null) {
-        if (mounted) {
+        if (mounted && !silent) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Autorisez la localisation pour trouver les pharmacies proches')),
+            const SnackBar(content: Text('Autorisez la localisation pour trier les pharmacies par distance')),
           );
         }
         return;
@@ -168,10 +190,10 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
         _userLat = pos.latitude;
         _userLng = pos.longitude;
       });
-      if (_selectedMed != null) {
-        await _fetchPharmaciesForMed(_selectedMed);
+      if (_mainSection == 1) {
+        await _fetchNearbyPharmacies();
       }
-      if (mounted) {
+      if (mounted && !silent) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Position récupérée — pharmacies triées par distance')),
         );
@@ -181,22 +203,25 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
     }
   }
 
-  Future<void> _fetchPharmaciesForMed(dynamic med) async {
+  Future<void> _fetchNearbyPharmacies({int? medId}) async {
     setState(() => _loadingPharmacies = true);
     try {
       final api = Provider.of<ApiService>(context, listen: false);
+      final effectiveMedId =
+          medId ?? (_selectedMed != null ? MedHelpers.parseId(_selectedMed['id']) : null);
+
       final data = await api.searchNearbyPharmacies(
         lat: _userLat,
         lng: _userLng,
-        medId: med['id'] as int,
+        medId: effectiveMedId,
       );
 
       var withStock = (data['withStock'] as List<dynamic>?) ?? [];
       var onDuty = (data['onDuty'] as List<dynamic>?) ?? [];
 
-      if (withStock.isEmpty && onDuty.isEmpty) {
+      if (withStock.isEmpty && effectiveMedId != null) {
         final legacy = await api.searchPharmacies(
-          med['id'] as int,
+          effectiveMedId,
           lat: _userLat,
           lng: _userLng,
         );
@@ -225,14 +250,37 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
     }
   }
 
-  Future<void> _selectMedication(dynamic med) async {
+  Future<void> _openPharmaciesSection({bool stockTab = false}) async {
     setState(() {
-      _selectedMed = med;
-      _pharmacyTab = 0;
+      _mainSection = 1;
+      _pharmacyTab = stockTab ? 0 : 1;
     });
-    if (med != null) {
-      await _fetchPharmaciesForMed(med);
+    if (_userLat == null) {
+      await _getLocation(silent: true);
     }
+    await _fetchNearbyPharmacies();
+  }
+
+  void _switchMainSection(int section) {
+    if (_mainSection == section) return;
+    setState(() => _mainSection = section);
+    if (section == 1) {
+      _openPharmaciesSection(stockTab: false);
+    }
+  }
+
+  List<dynamic> _filteredPharmacyList(List<dynamic> source) {
+    final q = _pharmacyFilterController.text.trim().toLowerCase();
+    if (q.isEmpty) return source;
+    return source.where((p) {
+      final name = MedHelpers.safeString(p['name']).toLowerCase();
+      final address = MedHelpers.safeString(p['address']).toLowerCase();
+      return name.contains(q) || address.contains(q);
+    }).toList();
+  }
+
+  Future<void> _selectMedication(dynamic med) async {
+    setState(() => _selectedMed = med);
   }
 
   Future<void> _callPharmacy(String? phone) async {
@@ -245,10 +293,13 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
 
   List<dynamic> _getRelevantInteractions() {
     if (_selectedMed == null) return [];
-    return _interactions.where((i) =>
-      i['med1Name'].toLowerCase() == _selectedMed['name'].toLowerCase() ||
-      i['med2Name'].toLowerCase() == _selectedMed['name'].toLowerCase()
-    ).toList();
+    final selectedName = MedHelpers.safeString(_selectedMed['name']).toLowerCase();
+    if (selectedName.isEmpty) return [];
+    return _interactions.where((i) {
+      final med1 = MedHelpers.safeString(i['med1Name']).toLowerCase();
+      final med2 = MedHelpers.safeString(i['med2Name']).toLowerCase();
+      return med1 == selectedName || med2 == selectedName;
+    }).toList();
   }
 
   void _handleAddToTreatment() {
@@ -374,104 +425,304 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
       body: Column(
         children: [
           if (!widget.embedded)
-            GradientHeader(title: 'Rechercher', subtitle: 'Catalogue médicaments', showBack: true)
+            GradientHeader(
+              title: 'Rechercher',
+              subtitle: _mainSection == 0 ? 'Catalogue médicaments' : 'Pharmacies & de garde',
+              showBack: true,
+            )
           else
-            GradientHeader(title: 'Rechercher', subtitle: 'Catalogue médicaments'),
+            GradientHeader(
+              title: 'Rechercher',
+              subtitle: _mainSection == 0 ? 'Catalogue médicaments' : 'Pharmacies & de garde',
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: _buildMainSectionTabs(),
+          ),
           Expanded(
             child: SafeArea(
               top: false,
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppColors.border),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.foreground.withValues(alpha: 0.05),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            child: Row(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  child: Icon(Icons.search_rounded, color: AppColors.mutedForeground, size: 24),
-                                ),
-                          Expanded(
-                            child: TextField(
-                              controller: _searchController,
-                              style: const TextStyle(fontSize: 18),
-                              decoration: const InputDecoration(
-                                hintText: 'Rechercher un médicament...',
-                                border: InputBorder.none,
-                                hintStyle: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ),
-                          ),
-                                if (_loading)
-                                  const Padding(
-                                    padding: EdgeInsets.only(right: 12),
-                                    child: SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        OutlinedButton.icon(
-                          onPressed: _isFindingLocation ? null : _getLocation,
-                          icon: _isFindingLocation
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : Icon(
-                                  _userLat != null ? Icons.location_on_rounded : Icons.my_location_rounded,
-                                  color: AppColors.primary,
-                                ),
-                          label: Text(
-                            _userLat != null
-                                ? 'Position active${_locationCity != null ? ' · $_locationCity' : ''}'
-                                : 'Pharmacies à proximité',
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: _selectedMed == null
-                        ? _buildResultsList()
-                        : _buildDetailView(relevantInteractions),
-                  ),
-                ],
-              ),
+              child: _mainSection == 0
+                  ? _buildMedicationsSection(relevantInteractions)
+                  : _buildPharmaciesSection(),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMainSectionTabs() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.muted,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _sectionTab(
+              label: 'Médicaments',
+              icon: Icons.medication_rounded,
+              selected: _mainSection == 0,
+              onTap: () => _switchMainSection(0),
+            ),
+          ),
+          Expanded(
+            child: _sectionTab(
+              label: 'Pharmacies',
+              icon: Icons.local_pharmacy_rounded,
+              selected: _mainSection == 1,
+              onTap: () => _switchMainSection(1),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionTab({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.surface : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: selected
+              ? [BoxShadow(color: AppColors.foreground.withValues(alpha: 0.06), blurRadius: 8)]
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 18, color: selected ? AppColors.primary : AppColors.mutedForeground),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                color: selected ? AppColors.primary : AppColors.mutedForeground,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMedicationsSection(List<dynamic> relevantInteractions) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Icon(Icons.search_rounded, color: AppColors.mutedForeground, size: 24),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      style: const TextStyle(fontSize: 18),
+                      decoration: const InputDecoration(
+                        hintText: 'Rechercher un médicament…',
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                  if (_loading)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 12),
+                      child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: _selectedMed == null
+              ? _buildResultsList()
+              : _buildDetailView(relevantInteractions),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPharmaciesSection() {
+    final list = _filteredPharmacyList(_pharmacyTab == 0 ? _pharmacies : _onDutyPharmacies);
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _isFindingLocation ? null : () => _getLocation(),
+                icon: _isFindingLocation
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : Icon(
+                        _userLat != null ? Icons.location_on_rounded : Icons.my_location_rounded,
+                        color: AppColors.primary,
+                      ),
+                label: Text(
+                  _userLat != null
+                      ? 'Ma position${_locationCity != null ? ' · $_locationCity' : ''}'
+                      : 'Utiliser ma position',
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: TextField(
+                  controller: _pharmacyFilterController,
+                  decoration: const InputDecoration(
+                    hintText: 'Filtrer par nom ou adresse…',
+                    prefixIcon: Icon(Icons.search_rounded),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  ),
+                ),
+              ),
+              if (_selectedMed != null) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.medication_rounded, color: AppColors.primary, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Stock pour : ${_selectedMed['name']}',
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Container(
+            decoration: BoxDecoration(color: AppColors.muted, borderRadius: BorderRadius.circular(14)),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() => _pharmacyTab = 1);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _pharmacyTab == 1 ? AppColors.surface : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'De garde (${_onDutyPharmacies.length})',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          color: _pharmacyTab == 1 ? AppColors.warning : AppColors.mutedForeground,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() => _pharmacyTab = 0);
+                      if (_selectedMed != null) {
+                        _fetchNearbyPharmacies();
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _pharmacyTab == 0 ? AppColors.surface : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Avec stock (${_pharmacies.length})',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          color: _pharmacyTab == 0 ? AppColors.primary : AppColors.mutedForeground,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: _loadingPharmacies
+              ? const Center(child: CircularProgressIndicator())
+              : list.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Text(
+                          _pharmacyTab == 0
+                              ? (_selectedMed == null
+                                  ? 'Sélectionnez un médicament dans l\'onglet Médicaments pour voir les stocks.'
+                                  : 'Aucune pharmacie avec ce médicament en stock.')
+                              : 'Aucune pharmacie de garde${_userLat == null ? '\nActivez votre position pour affiner' : ''}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: AppColors.mutedForeground),
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                      itemCount: list.length,
+                      itemBuilder: (context, index) =>
+                          _buildPharmacyCard(list[index], isGarde: _pharmacyTab == 1),
+                    ),
+        ),
+      ],
     );
   }
 
@@ -485,7 +736,9 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
             Padding(
               padding: const EdgeInsets.only(bottom: 8.0),
               child: Text(
-                '${_medications.length} médicaments trouvés',
+                _medications.length >= _maxResults
+                    ? '$_maxResults+ résultats — affinez votre recherche'
+                    : '${_medications.length} médicament(s) trouvé(s)',
                 style: const TextStyle(
                   color: Colors.grey,
                   fontSize: 14,
@@ -577,14 +830,11 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Hero(
-                tag: 'med_photo_${med['id']}',
-                child: MedicationImage(
-                  photoUrl: med['photoUrl']?.toString(),
-                  width: 56,
-                  height: 56,
-                  borderRadius: 18,
-                ),
+              MedicationImage(
+                photoUrl: MedHelpers.photoForList(med['photoUrl']?.toString()),
+                width: 56,
+                height: 56,
+                borderRadius: 18,
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -655,19 +905,17 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Photo du médicament (URL absolue, /uploads/ ou base64)
-                  Hero(
-                    tag: 'med_photo_${_selectedMed['id']}',
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: MedicationImage(
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final w = constraints.maxWidth.isFinite ? constraints.maxWidth : 300.0;
+                      return MedicationImage(
                         photoUrl: _selectedMed['photoUrl']?.toString(),
-                        width: double.infinity,
+                        width: w,
                         height: 220,
                         borderRadius: 24,
                         fit: BoxFit.cover,
-                      ),
-                    ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 24),
                   // Header
@@ -726,12 +974,15 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                       Row(
                         children: [
                           IconButton.filledTonal(
-                            onPressed: () => _toggleBookmark(_selectedMed['id']),
+                            onPressed: () {
+                              final id = MedHelpers.parseId(_selectedMed['id']);
+                              if (id != null) _toggleBookmark(id);
+                            },
                             icon: Icon(
-                              _bookmarks.contains(_selectedMed['id'])
+                              _bookmarks.contains(MedHelpers.parseId(_selectedMed['id']))
                                   ? Icons.bookmark
                                   : Icons.bookmark_border,
-                              color: _bookmarks.contains(_selectedMed['id'])
+                              color: _bookmarks.contains(MedHelpers.parseId(_selectedMed['id']))
                                   ? Colors.amber
                                   : null,
                             ),
@@ -847,11 +1098,11 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                   if (relevantInteractions.isNotEmpty)
                     ...relevantInteractions.map(
                       (inter) {
+                        final selectedName = MedHelpers.safeString(_selectedMed['name']).toLowerCase();
                         final otherMed =
-                            inter['med1Name'].toLowerCase() ==
-                                    _selectedMed['name'].toLowerCase()
-                                ? inter['med2Name']
-                                : inter['med1Name'];
+                            MedHelpers.safeString(inter['med1Name']).toLowerCase() == selectedName
+                                ? MedHelpers.safeString(inter['med2Name'])
+                                : MedHelpers.safeString(inter['med1Name']);
                         final Color riskColor;
                         final Color bgColor;
                         final Color borderColor;
@@ -965,126 +1216,16 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
 
           const SizedBox(height: 16),
 
-          // Availability
-          _buildPharmacySection(),
+          OutlinedButton.icon(
+            onPressed: () => _openPharmaciesSection(stockTab: true),
+            icon: const Icon(Icons.local_pharmacy_rounded),
+            label: const Text('Voir disponibilité en pharmacie'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 52),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildPharmacySection() {
-    final list = _pharmacyTab == 0 ? _pharmacies : _onDutyPharmacies;
-
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.store_rounded, color: Theme.of(context).colorScheme.primary, size: 24),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'Pharmacies proches',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-                  ),
-                ),
-                if (_userLat == null)
-                  TextButton.icon(
-                    onPressed: _isFindingLocation ? null : _getLocation,
-                    icon: const Icon(Icons.my_location, size: 18),
-                    label: const Text('Localiser'),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.muted,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _pharmacyTab = 0),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _pharmacyTab == 0 ? AppColors.surface : Colors.transparent,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: _pharmacyTab == 0
-                              ? [BoxShadow(color: AppColors.foreground.withValues(alpha: 0.06), blurRadius: 8)]
-                              : null,
-                        ),
-                        child: Text(
-                          'Avec stock (${_pharmacies.length})',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                            color: _pharmacyTab == 0 ? AppColors.primary : AppColors.mutedForeground,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _pharmacyTab = 1),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _pharmacyTab == 1 ? AppColors.surface : Colors.transparent,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: _pharmacyTab == 1
-                              ? [BoxShadow(color: AppColors.foreground.withValues(alpha: 0.06), blurRadius: 8)]
-                              : null,
-                        ),
-                        child: Text(
-                          'De garde (${_onDutyPharmacies.length})',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                            color: _pharmacyTab == 1 ? AppColors.warning : AppColors.mutedForeground,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (_loadingPharmacies)
-              const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
-            else if (list.isEmpty)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  color: AppColors.muted,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Center(
-                  child: Text(
-                    _pharmacyTab == 0
-                        ? 'Aucune pharmacie avec ce médicament en stock'
-                        : 'Aucune pharmacie de garde trouvée${_userLat == null ? '\nActivez votre position' : ''}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: AppColors.mutedForeground),
-                  ),
-                ),
-              )
-            else
-              ...list.map((p) => _buildPharmacyCard(p, isGarde: _pharmacyTab == 1)),
-          ],
-        ),
       ),
     );
   }
@@ -1125,7 +1266,7 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                           ),
                         Expanded(
                           child: Text(
-                            pharmacy['name'] ?? '',
+                            MedHelpers.safeString(pharmacy['name'], 'Pharmacie'),
                             style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
                           ),
                         ),
@@ -1138,7 +1279,7 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            pharmacy['address'] ?? '',
+                            MedHelpers.safeString(pharmacy['address'], 'Adresse non renseignée'),
                             style: const TextStyle(fontSize: 12, color: AppColors.mutedForeground),
                           ),
                         ),
@@ -1156,7 +1297,7 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                     border: Border.all(color: AppColors.border),
                   ),
                   child: Text(
-                    '${pharmacy['distance']} km',
+                    MedHelpers.formatDistance(pharmacy['distance']),
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primary),
                   ),
                 ),
@@ -1188,7 +1329,7 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                   ],
                 ),
               const Spacer(),
-              if (pharmacy['phone'] != null)
+              if (MedHelpers.safeString(pharmacy['phone']).trim().isNotEmpty)
                 OutlinedButton.icon(
                   onPressed: () => _callPharmacy(pharmacy['phone']?.toString()),
                   icon: const Icon(Icons.phone_rounded, size: 18),

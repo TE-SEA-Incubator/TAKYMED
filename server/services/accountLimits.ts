@@ -29,18 +29,33 @@ export function isUnlimited(limit: number | null | undefined): boolean {
 }
 
 export function getUserAccountLimits(userId: number): UserAccountLimits | null {
-  const row = db
-    .prepare(
-      `
-      SELECT tc.max_ordonnances as maxOrdonnances, tc.max_rappels as maxRappels
-      FROM Utilisateurs u
-      JOIN TypesComptes tc ON u.id_type_compte = tc.id_type_compte
-      WHERE u.id_utilisateur = ?
-    `,
-    )
-    .get(userId) as UserAccountLimits | undefined;
+  if (!Number.isFinite(userId) || userId <= 0) return null;
 
-  return row || null;
+  const user = db
+    .prepare("SELECT id_type_compte FROM Utilisateurs WHERE id_utilisateur = ?")
+    .get(userId) as { id_type_compte: number | null } | undefined;
+
+  if (!user) return null;
+
+  if (user.id_type_compte != null) {
+    const row = db
+      .prepare(
+        `
+      SELECT tc.max_ordonnances as maxOrdonnances, tc.max_rappels as maxRappels
+      FROM TypesComptes tc
+      WHERE tc.id_type_compte = ?
+    `,
+      )
+      .get(user.id_type_compte) as UserAccountLimits | undefined;
+
+    if (row) return row;
+  }
+
+  // Utilisateur sans type lié : quotas illimités pour ne pas bloquer la création
+  return {
+    maxOrdonnances: -1,
+    maxRappels: -1,
+  };
 }
 
 export function countActiveOrdonnances(userId: number): number {

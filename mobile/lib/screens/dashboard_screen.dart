@@ -222,45 +222,20 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                             ),
                           ),
                           const SizedBox(height: 24),
-                        AnimatedFadeSlide(
-                          index: 1,
-                          child: AppCard(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Quotas',
-                                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                ),
-                                const SizedBox(height: 20),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    CircularQuotaIndicator(
-                                      label: 'Ordonnances',
-                                      used: (_data!['stats']['quota']['ordonnances']['used'] as num?)?.toInt() ?? 0,
-                                      max: (_data!['stats']['quota']['ordonnances']['unlimited'] == true)
-                                          ? null
-                                          : (_data!['stats']['quota']['ordonnances']['max'] as num?)?.toInt(),
-                                      unlimited: _data!['stats']['quota']['ordonnances']['unlimited'] == true,
-                                    ),
-                                    CircularQuotaIndicator(
-                                      label: 'Rappels',
-                                      used: (_data!['stats']['quota']['rappels']['used'] as num?)?.toInt() ?? 0,
-                                      max: (_data!['stats']['quota']['rappels']['unlimited'] == true)
-                                          ? null
-                                          : (_data!['stats']['quota']['rappels']['max'] as num?)?.toInt(),
-                                      unlimited: _data!['stats']['quota']['rappels']['unlimited'] == true,
-                                    ),
-                                  ],
-                                ),
-                              ],
+                          AnimatedFadeSlide(
+                            index: 1,
+                            child: QuotaSection(
+                              ordonnances: QuotaInfo.fromMap(
+                                (_data!['stats']['quota'] as Map<String, dynamic>?)?['ordonnances']
+                                    as Map<String, dynamic>?,
+                              ),
+                              rappels: QuotaInfo.fromMap(
+                                (_data!['stats']['quota'] as Map<String, dynamic>?)?['rappels']
+                                    as Map<String, dynamic>?,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 24),
+                          const SizedBox(height: 24),
                         ],
                         AnimatedFadeSlide(
                           index: 2,
@@ -368,9 +343,11 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
           ),
         ],
       ),
-    ).animate(onPlay: (c) => c.repeat(reverse: true)).shimmer(
-          duration: 3000.ms,
-          color: Colors.white.withValues(alpha: 0.1),
+    ).animate().fadeIn(duration: 500.ms, curve: Curves.easeOut).scale(
+          begin: const Offset(0.97, 0.97),
+          end: const Offset(1, 1),
+          duration: 500.ms,
+          curve: Curves.easeOutCubic,
         );
   }
 }

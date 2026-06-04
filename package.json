@@ -16,6 +16,7 @@
     "build:full": "npm run typecheck && npm test && npm run build",
     "build:client": "vite build",
     "build:server": "vite build --config vite.config.server.ts",
+    "zip": "node scripts/zip-frontend.mjs",
     "start": "node dist/server/node-build.mjs",
     "test": "vitest --run",
     "format.fix": "prettier --write .",
@@ -25,7 +26,10 @@
     "flutter:build": "cd mobile && flutter build apk",
     "scrape:pharmacies": "tsx scripts/scrape_pharmacies_garde.ts",
     "generate:vapid": "node --import tsx -e \"import webpush from 'web-push'; const k=webpush.generateVAPIDKeys(); console.log('WEB_PUSH_PUBLIC_KEY='+k.publicKey); console.log('WEB_PUSH_PRIVATE_KEY='+k.privateKey);\"",
-    "apk": "node scripts/bump-mobile-version.mjs && cd mobile && flutter build apk --release && cp build/app/outputs/flutter-apk/app-release.apk ../takymed.apk && echo '✅ APK copié : takymed.apk'"
+    "mobile:bump": "node scripts/bump-mobile-version.mjs",
+    "apk": "npm run mobile:bump && cd mobile && flutter build apk --release && cp build/app/outputs/flutter-apk/app-release.apk ../takymed.apk && echo \"✅ APK copié : takymed.apk (v$(node scripts/read-mobile-version.mjs --display))\"",
+    "aab": "npm run mobile:bump && cd mobile && flutter build appbundle --release && cp build/app/outputs/bundle/release/app-release.aab ../takymed.aab && echo \"✅ AAB copié : takymed.aab (v$(node scripts/read-mobile-version.mjs --display))\"",
+    "mobile:release": "npm run mobile:bump && cd mobile && flutter build apk --release && flutter build appbundle --release && cp build/app/outputs/flutter-apk/app-release.apk ../takymed.apk && cp build/app/outputs/bundle/release/app-release.aab ../takymed.aab && echo \"✅ Release mobile v$(node scripts/read-mobile-version.mjs --display) : takymed.apk + takymed.aab\""
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.8",

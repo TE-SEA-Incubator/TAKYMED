@@ -1,7 +1,69 @@
 import { db } from "../db";
+import { getUserAccountContext } from "./prescriptionAccessService";
 
 export function normalizePhone(phone: string): string {
-  return phone.replace(/[\s\-().]/g, "").trim();
+  let p = phone.replace(/[\s\-().]/g, "").trim();
+  if (!p) return "";
+
+  // Corrige les doubles préfixes (+237+237..., 237237...)
+  while (p.startsWith("+237+237")) {
+    p = "+237" + p.slice(8);
+  }
+  if (p.startsWith("237237")) {
+    p = "+237" + p.slice(6);
+  }
+
+  if (/^\+2376\d{8}$/.test(p)) return p;
+
+  if (p.startsWith("2376") && !p.startsWith("+")) {
+    p = "+237" + p.slice(3);
+  }
+
+  const local = p.replace(/^\+237/, "").replace(/^0/, "");
+  if (/^6\d{8}$/.test(local)) {
+    return "+237" + local;
+  }
+
+  return p;
+}
+
+export function findCommercialClientForValidation(
+  commercialId: number,
+  options: { clientId?: number; phone?: string },
+) {
+  if (options.clientId != null && Number.isFinite(options.clientId)) {
+    return db
+      .prepare(
+        `
+      SELECT id_utilisateur, pin_hash, est_valide, numero_telephone
+      FROM Utilisateurs
+      WHERE id_utilisateur = ? AND id_createur = ?
+    `,
+      )
+      .get(options.clientId, commercialId) as
+      | { id_utilisateur: number; pin_hash: string; est_valide: number; numero_telephone: string }
+      | undefined;
+  }
+
+  const normalizedPhone = options.phone ? normalizePhone(options.phone) : "";
+  if (!normalizedPhone) return undefined;
+
+  const candidates = db
+    .prepare(
+      `
+    SELECT id_utilisateur, pin_hash, est_valide, numero_telephone
+    FROM Utilisateurs
+    WHERE id_createur = ?
+  `,
+    )
+    .all(commercialId) as Array<{
+    id_utilisateur: number;
+    pin_hash: string;
+    est_valide: number;
+    numero_telephone: string;
+  }>;
+
+  return candidates.find((c) => normalizePhone(c.numero_telephone) === normalizedPhone);
 }
 
 export function normalizeClientName(name: string): string {
@@ -81,22 +143,13 @@ export function checkClientAvailability(
 }
 
 export function assertCommercialActor(commercialId: number) {
-  const commercial = db
-    .prepare(
-      `
-    SELECT u.id_utilisateur, tc.nom_type as typeName
-    FROM Utilisateurs u
-    JOIN TypesComptes tc ON u.id_type_compte = tc.id_type_compte
-    WHERE u.id_utilisateur = ?
-  `,
-    )
-    .get(commercialId) as { id_utilisateur: number; typeName: string } | undefined;
+  const commercial = getUserAccountContext(commercialId);
 
   if (!commercial) {
     return { ok: false as const, status: 403, error: "Accès refusé. Utilisateur non trouvé." };
   }
 
-  const role = commercial.typeName.toLowerCase();
+  const role = commercial.typeName;
   if (role !== "commercial" && role !== "administrateur") {
     return {
       ok: false as const,
@@ -105,7 +158,10 @@ export function assertCommercialActor(commercialId: number) {
     };
   }
 
-  return { ok: true as const, commercial };
+  return {
+    ok: true as const,
+    commercial: { id_utilisateur: commercial.id, typeName: commercial.typeName },
+  };
 }
 
 export function assertHeaderMatchesCommercial(

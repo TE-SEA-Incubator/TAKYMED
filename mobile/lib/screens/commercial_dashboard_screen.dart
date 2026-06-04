@@ -13,6 +13,7 @@ import '../widgets/page_transitions.dart';
 import '../widgets/primary_button.dart';
 import '../widgets/status_badge.dart';
 import 'commercial_register_screen.dart';
+import 'create_prescription_screen.dart';
 
 class CommercialDashboardScreen extends StatefulWidget {
   final bool embedded;
@@ -161,13 +162,30 @@ class _CommercialDashboardScreenState extends State<CommercialDashboardScreen> {
             title: 'Espace commercial',
             subtitle: '$totalClients client${totalClients > 1 ? 's' : ''} enregistré${totalClients > 1 ? 's' : ''}',
             showBack: !widget.embedded,
-            bottom: PrimaryButton(
-              label: 'Inscrire un client',
-              icon: Icons.person_add_rounded,
-              onPressed: () async {
-                await pushSlide(context, const CommercialRegisterScreen());
-                await fetchClients();
-              },
+            bottom: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => pushSlide(context, const CreatePrescriptionScreen()),
+                  icon: const Icon(Icons.add_alarm_rounded),
+                  label: const Text('Créer un rappel pour moi'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white54),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                PrimaryButton(
+                  label: 'Inscrire un client',
+                  icon: Icons.person_add_rounded,
+                  onPressed: () async {
+                    await pushSlide(context, const CommercialRegisterScreen());
+                    await fetchClients();
+                  },
+                ),
+              ],
             ),
           ),
           Expanded(
@@ -272,6 +290,22 @@ class _CommercialDashboardScreenState extends State<CommercialDashboardScreen> {
                                           const SizedBox(width: 16),
                                           _miniStat(Icons.notifications_outlined, '${(client['reminderCount'] as num?)?.toInt() ?? 0} rappels'),
                                           const Spacer(),
+                                          if (isValid)
+                                            IconButton(
+                                              icon: const Icon(Icons.add_alarm_rounded, size: 20, color: AppColors.primary),
+                                              tooltip: 'Créer une ordonnance',
+                                              onPressed: () {
+                                                final clientId = (client['id'] as num?)?.toInt();
+                                                if (clientId == null || clientId <= 0) return;
+                                                pushSlide(
+                                                  context,
+                                                  CreatePrescriptionScreen(
+                                                    targetUserId: clientId,
+                                                    targetUserName: client['name'] as String?,
+                                                  ),
+                                                );
+                                              },
+                                            ),
                                           IconButton(
                                             icon: const Icon(Icons.delete_outline_rounded, color: AppColors.destructive),
                                             onPressed: () => deleteClient(client['id'] as int, client['name'] as String),

@@ -10,6 +10,7 @@ import '../widgets/animated_fade_slide.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/gradient_header.dart';
+import '../utils/app_version.dart';
 import '../widgets/primary_button.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -31,6 +32,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isSavingNotifPrefs = false;
   final Set<String> _notifChannels = {'push', 'whatsapp'};
   final _notifPhoneController = TextEditingController();
+  String _appVersionLabel = 'TAKYMED';
 
   @override
   void initState() {
@@ -40,6 +42,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _phoneController.text = authProvider.user?.phone ?? '';
     _notifPhoneController.text = (authProvider.user?.phone ?? '').replaceAll('+237', '');
     _loadNotificationPreferences();
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    final label = await AppVersion.label();
+    if (mounted) setState(() => _appVersionLabel = label);
   }
 
   Future<void> _loadNotificationPreferences() async {
@@ -301,7 +309,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Notifications', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                          const Text('Canaux par défaut', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Pré-remplissent l\'étape 2 lors de la création d\'un rappel. Le choix final se fait à chaque nouveau rappel.',
+                            style: TextStyle(fontSize: 12, color: AppColors.mutedForeground.withValues(alpha: 0.9)),
+                          ),
                           const SizedBox(height: 12),
                           if (_isLoadingNotifPrefs)
                             const Center(child: CircularProgressIndicator())
@@ -328,7 +341,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ],
                             const SizedBox(height: 16),
                             PrimaryButton(
-                              label: 'Enregistrer les canaux',
+                              label: 'Enregistrer les défauts',
                               icon: Icons.notifications_rounded,
                               isLoading: _isSavingNotifPrefs,
                               onPressed: _saveNotificationPreferences,
@@ -408,7 +421,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 24),
                 Center(
                   child: Text(
-                    'TAKYMED v1.0.0',
+                    _appVersionLabel,
                     style: TextStyle(color: AppColors.mutedForeground.withValues(alpha: 0.6), fontSize: 12),
                   ),
                 ),

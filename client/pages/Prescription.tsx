@@ -32,8 +32,11 @@ import { MedicationEntry, DoseSchedule, FrequencyType } from "@shared/api";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
-
-
+import { toast } from "sonner";
+import { PageShell } from "@/components/app/PageShell";
+import { PageHeader } from "@/components/app/PageHeader";
+import { StepIndicator } from "@/components/app/StepIndicator";
+import { TargetContextBanner } from "@/components/app/TargetContextBanner";
 
 export default function Prescription() {
   const { user } = useAuth();
@@ -313,27 +316,32 @@ export default function Prescription() {
     return clashes;
   }, [medications, interactions]);
 
+  const isForClient = Boolean(initialClientId);
+  const prescriptionSteps = [
+    { id: 1, label: "Médicaments" },
+    { id: 2, label: "Rappels & canaux" },
+  ];
+
   return (
-    <div className="bg-slate-50 min-h-screen pb-20">
-      <div className="container mx-auto px-4 py-6 md:py-8 max-w-5xl">
-        {/* Progress Header */}
-        <div className="flex items-center gap-4 mb-8 overflow-x-auto pb-4">
-          <div className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-2xl whitespace-nowrap",
-            step >= 1 ? "bg-primary text-white" : "bg-slate-200 text-muted-foreground"
-          )}>
-            <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">1</div>
-            <span className="font-medium">{t('nav.medications')}</span>
-          </div>
-          <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
-          <div className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-2xl whitespace-nowrap",
-            step >= 2 ? "bg-primary text-white" : "bg-slate-200 text-muted-foreground"
-          )}>
-            <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">2</div>
-            <span className="font-medium">{t('prescription.reminderTimes')}</span>
-          </div>
-        </div>
+    <PageShell maxWidth="lg">
+      <PageHeader
+        badge={user?.type === "commercial" ? "Espace commercial" : "Ordonnance"}
+        title={isForClient ? "Ordonnance client" : "Nouveau rappel"}
+        subtitle={
+          isForClient
+            ? "Configurez le traitement et les canaux de notification pour votre client."
+            : "Créez un rappel de prise avec horaires et notifications personnalisées."
+        }
+      />
+
+      <TargetContextBanner
+        mode={isForClient ? "client" : "self"}
+        clientName={initialClientName || patient.name}
+        clientPhone={initialClientPhone}
+        actorName={user?.name}
+      />
+
+      <StepIndicator steps={prescriptionSteps} currentStep={step} />
 
         {step === 1 && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -865,6 +873,18 @@ export default function Prescription() {
                       toast.error("Vous devez être connecté");
                       return;
                     }
+                    if (!user.id || user.id <= 0) {
+                      toast.error("Session invalide. Reconnectez-vous.");
+                      return;
+                    }
+
+                    const targetUserId = initialClientId
+                      ? Number.parseInt(initialClientId, 10)
+                      : user.id;
+                    if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
+                      toast.error("Compte patient cible invalide.");
+                      return;
+                    }
 
                     setIsSubmitting(true);
                     try {
@@ -876,8 +896,9 @@ export default function Prescription() {
                            "x-user-id": user.id.toString()
                         },
                         body: JSON.stringify({
-                                userId: initialClientId ? parseInt(initialClientId) : user.id,
-                               title: patient.title,
+                                userId: targetUserId,
+                               title: patient.title.trim(),
+                               patientName: patient.name || user.name || "",
                                weight: patient.weight,
                                categorieAge: patient.categorieAge,
                                startDate: patient.startDate,
@@ -892,7 +913,10 @@ export default function Prescription() {
                             })
                       });
 
-                      if (!res.ok) throw new Error("Erreur de sauvegarde");
+                      if (!res.ok) {
+                        const errBody = await res.json().catch(() => null);
+                        throw new Error(errBody?.error || "Erreur de sauvegarde");
+                      }
 
                       await ensurePushIfSelected(user.id, notifConfig.channels);
 
@@ -922,7 +946,11 @@ export default function Prescription() {
 
                     } catch (error) {
                       console.error(error);
-                      toast.error("Échec de l'enregistrement de l'ordonnance");
+                      toast.error(
+                        error instanceof Error
+                          ? error.message
+                          : "Échec de l'enregistrement de l'ordonnance",
+                      );
                       setIsSubmitting(false);
                     }
                   }}
@@ -943,8 +971,7 @@ export default function Prescription() {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </PageShell>
   );
 }
 

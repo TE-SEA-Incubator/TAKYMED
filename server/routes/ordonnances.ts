@@ -3,10 +3,10 @@ import { db } from "../db";
 import {
     countActiveOrdonnances,
     countPendingRappels,
-    getUserAccountLimits,
     isUnlimited,
     refreshOrdonnanceActiveState,
 } from "../services/accountLimits";
+import { resolveAccountLimits } from "../services/prescriptionAccessService";
 
 const router = Router();
 
@@ -203,7 +203,7 @@ router.patch("/:id/reactivate", (req, res) => {
 
         refreshOrdonnanceActiveState(ordonnanceMeta.id_utilisateur);
 
-        const limits = getUserAccountLimits(ordonnanceMeta.id_utilisateur);
+        const limits = resolveAccountLimits(ordonnanceMeta.id_utilisateur);
         if (!limits) {
             return res.status(404).json({ error: "Compte utilisateur introuvable" });
         }
@@ -301,9 +301,9 @@ router.post("/:id/medicaments", (req, res) => {
             return res.status(404).json({ error: "Ordonnance not found" });
         }
 
-        const limits = getUserAccountLimits(ordonnanceOwner.id_utilisateur);
+        const limits = resolveAccountLimits(ordonnanceOwner.id_utilisateur);
         if (!limits) {
-            return res.status(404).json({ error: "User account not found" });
+            return res.status(404).json({ error: "Compte utilisateur introuvable" });
         }
 
         refreshOrdonnanceActiveState(ordonnanceOwner.id_utilisateur);
@@ -392,9 +392,9 @@ router.put("/:id/medicaments/:elementId", (req, res) => {
             return res.status(404).json({ error: "Ordonnance not found" });
         }
 
-        const limits = getUserAccountLimits(ordonnanceOwner.id_utilisateur);
+        const limits = resolveAccountLimits(ordonnanceOwner.id_utilisateur);
         if (!limits) {
-            return res.status(404).json({ error: "User account not found" });
+            return res.status(404).json({ error: "Compte utilisateur introuvable" });
         }
 
         refreshOrdonnanceActiveState(ordonnanceOwner.id_utilisateur);

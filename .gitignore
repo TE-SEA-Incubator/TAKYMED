@@ -43,3 +43,8 @@ public/uploads/
 
 # WhatsApp Session
 data/auth_info_baileys/
+
+# Builds mobile (générés par npm run apk / aab / mobile:release)
+takymed.apk
+takymed.aab
+takymed-web.zip

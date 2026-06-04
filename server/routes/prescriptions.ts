@@ -9,8 +9,43 @@ import {
     refreshOrdonnanceActiveState,
 } from "../services/accountLimits";
 import { saveUserNotificationPreferences } from "../services/notificationPreferencesService";
+import {
+    canManagePrescriptionFor,
+    getUserAccountContext,
+    resolveAccountLimits,
+} from "../services/prescriptionAccessService";
 
 const router = Router();
+
+function resolvePatientName(userId: number, explicitName?: unknown): string {
+    const trimmed = typeof explicitName === "string" ? explicitName.trim() : "";
+    if (trimmed) return trimmed;
+
+    const row = db
+        .prepare(
+            `
+        SELECT COALESCE(p.nom_complet, u.numero_telephone, 'Patient') as name
+        FROM Utilisateurs u
+        LEFT JOIN ProfilsUtilisateurs p ON p.id_utilisateur = u.id_utilisateur
+        WHERE u.id_utilisateur = ?
+    `,
+        )
+        .get(userId) as { name?: string } | undefined;
+
+    return row?.name?.trim() || "Patient";
+}
+
+function resolveOrdonnanceTitle(title: unknown, medications: any[]): string {
+    const trimmed = typeof title === "string" ? title.trim() : "";
+    if (trimmed) return trimmed;
+
+    const firstMed = medications?.[0]?.name;
+    if (typeof firstMed === "string" && firstMed.trim()) {
+        return `Rappel — ${firstMed.trim()}`;
+    }
+
+    return "Ordonnance";
+}
 
 function estimateReminderCountFromMedications(medications: any[]): number {
     let total = 0;
@@ -130,27 +165,34 @@ router.get("/", (req, res) => {
 
 // Create a new prescription
 router.post("/", (req, res) => {
-    const { userId, title, weight, categorieAge, medications, notifConfig, startDate } = req.body;
-    if (!userId) return res.status(400).json({ error: "User ID required" });
+    const { userId, title, patientName, nomPatient, weight, categorieAge, medications, notifConfig, startDate } =
+        req.body;
+    const meds = Array.isArray(medications) ? medications : [];
+    if (!userId) return res.status(400).json({ error: "Identifiant utilisateur requis" });
 
     const numericUserId = Number(userId);
-    if (!Number.isFinite(numericUserId)) {
-        return res.status(400).json({ error: "Invalid user ID" });
+    if (!Number.isFinite(numericUserId) || numericUserId <= 0) {
+        return res.status(400).json({ error: "Identifiant utilisateur invalide" });
     }
 
-    // Header validation (consistent with Dashboard)
-    const headerUserId = req.headers['x-user-id'];
-    if (headerUserId && headerUserId.toString() !== userId.toString()) {
-        // Check if the requester is a commercial user who created this client
-        const client = db.prepare("SELECT id_createur FROM Utilisateurs WHERE id_utilisateur = ?").get(userId) as { id_createur: number } | undefined;
-        if (!client || client.id_createur?.toString() !== headerUserId.toString()) {
-            return res.status(403).json({ error: "User ID mismatch or unauthorized commercial link" });
-        }
+    const ordonnanceTitle = resolveOrdonnanceTitle(title, meds);
+    const ordonnancePatientName = resolvePatientName(numericUserId, patientName ?? nomPatient);
+
+    const headerUserId = req.headers["x-user-id"];
+    const actorId = headerUserId ? Number(headerUserId) : numericUserId;
+    const access = canManagePrescriptionFor(actorId, numericUserId);
+    if (!access.allowed) {
+        return res.status(403).json({ error: access.reason || "Accès refusé" });
     }
 
-    const limits = getUserAccountLimits(numericUserId);
+    const targetUser = getUserAccountContext(numericUserId);
+    if (!targetUser) {
+        return res.status(404).json({ error: "Compte utilisateur introuvable" });
+    }
+
+    const limits = resolveAccountLimits(numericUserId);
     if (!limits) {
-        return res.status(404).json({ error: "User account not found" });
+        return res.status(404).json({ error: "Compte utilisateur introuvable" });
     }
 
     refreshOrdonnanceActiveState(numericUserId);
@@ -162,7 +204,7 @@ router.post("/", (req, res) => {
         });
     }
 
-    const newReminderCount = estimateReminderCountFromMedications(Array.isArray(medications) ? medications : []);
+    const newReminderCount = estimateReminderCountFromMedications(meds);
     if (!isUnlimited(limits.maxRappels)) {
         const currentPendingRappels = countPendingRappels(numericUserId);
         const projectedRappels = currentPendingRappels + newReminderCount;
@@ -180,7 +222,14 @@ router.post("/", (req, res) => {
                 INSERT INTO Ordonnances (id_utilisateur, titre, nom_patient, poids_patient, categorie_age, date_ordonnance, date_debut) 
                 VALUES (?, ?, ?, ?, ?, CURRENT_DATE, ?)
             `);
-            const ordInfo = ordStmt.run(userId, title, title, weight || 0, categorieAge || 'adulte', startDate || null);
+            const ordInfo = ordStmt.run(
+                userId,
+                ordonnanceTitle,
+                ordonnancePatientName,
+                weight || 0,
+                categorieAge || "adulte",
+                startDate || null,
+            );
             const idOrdonnance = ordInfo.lastInsertRowid;
 
             // 2. Save Notification Preferences (multi contacts + multi channels)
@@ -189,7 +238,7 @@ router.post("/", (req, res) => {
             }
 
             // 3. Iterate each Medication
-            for (const m of medications) {
+            for (const m of meds) {
                 let medRecord = db.prepare("SELECT id_medicament FROM Medicaments WHERE LOWER(nom) = LOWER(?)").get(m.name) as { id_medicament: number } | undefined;
 
                 let idMedicament;

@@ -7,14 +7,24 @@ import '../services/api_service.dart';
 import '../services/push_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/animated_fade_slide.dart';
+import '../widgets/app_card.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/gradient_header.dart';
 import '../widgets/primary_button.dart';
+import '../widgets/reminder_notification_config.dart';
 
 class CreatePrescriptionScreen extends StatefulWidget {
   final String? initialMedName;
+  /// Compte patient cible (commercial : client). Null = compte connecté.
+  final int? targetUserId;
+  final String? targetUserName;
 
-  const CreatePrescriptionScreen({super.key, this.initialMedName});
+  const CreatePrescriptionScreen({
+    super.key,
+    this.initialMedName,
+    this.targetUserId,
+    this.targetUserName,
+  });
 
   @override
   State<CreatePrescriptionScreen> createState() => _CreatePrescriptionScreenState();
@@ -31,20 +41,46 @@ class _CreatePrescriptionScreenState extends State<CreatePrescriptionScreen> {
   List<String> _times = ['08:00'];
   List<TextEditingController> _timeControllers = [TextEditingController(text: '08:00')];
   bool _isLoading = false;
+  int _step = 1;
   final _phoneController = TextEditingController();
-  final Set<String> _channels = {'push', 'whatsapp'};
+  Set<String> _channels = {'push', 'whatsapp'};
 
   @override
   void initState() {
     super.initState();
     if (widget.initialMedName != null) {
       _medicationNameController.text = widget.initialMedName!;
-      _titleController.text = widget.initialMedName!;
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadDefaults());
+  }
+
+  Future<void> _loadDefaults() async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    if (auth.user?.phone != null) {
-      _phoneController.text = auth.user!.phone!.replaceAll('+237', '');
+    final api = Provider.of<ApiService>(context, listen: false);
+    if (auth.user == null) return;
+
+    if (auth.user?.phone != null && _phoneController.text.isEmpty) {
+      _phoneController.text = auth.user!.phone!.replaceAll('+237', '').replaceAll(RegExp(r'^\+\d+'), '');
     }
+
+    try {
+      final prefs = await api.getNotificationPreferences(auth.user!.id);
+      if (!mounted) return;
+      final savedChannels = (prefs['channels'] as List<dynamic>?)
+          ?.map((e) => e.toString())
+          .where((c) => ['sms', 'whatsapp', 'call', 'push'].contains(c))
+          .toList();
+      final recipients = (prefs['recipients'] as List<dynamic>?) ?? [];
+      setState(() {
+        if (savedChannels != null && savedChannels.isNotEmpty) {
+          _channels = savedChannels.toSet();
+        }
+        if (recipients.isNotEmpty) {
+          final raw = recipients.first.toString();
+          _phoneController.text = raw.replaceAll('+237', '').replaceAll(RegExp(r'^\+\d+'), '');
+        }
+      });
+    } catch (_) {}
   }
 
   @override
@@ -66,10 +102,15 @@ class _CreatePrescriptionScreenState extends State<CreatePrescriptionScreen> {
         _times = [];
       } else {
         int count = 0;
-        if (_frequencyType == '1x') count = 1;
-        else if (_frequencyType == '2x') count = 2;
-        else if (_frequencyType == '3x') count = 3;
-        else if (_frequencyType == '4x') count = 4;
+        if (_frequencyType == '1x') {
+          count = 1;
+        } else if (_frequencyType == '2x') {
+          count = 2;
+        } else if (_frequencyType == '3x') {
+          count = 3;
+        } else if (_frequencyType == '4x') {
+          count = 4;
+        }
 
         if (count > 0) {
           final List<String> newTimes = [];
@@ -93,22 +134,57 @@ class _CreatePrescriptionScreenState extends State<CreatePrescriptionScreen> {
     });
   }
 
+  bool _validateStep1() => _formKey.currentState?.validate() ?? false;
+
+  void _goToStep2() {
+    if (!_validateStep1()) return;
+    setState(() => _step = 2);
+  }
+
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!ReminderNotificationConfig.isValid(_channels, _phoneController)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sélectionnez au moins un canal et un téléphone si SMS/WhatsApp/Appel sont activés'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final apiService = Provider.of<ApiService>(context, listen: false);
 
+      final actor = authProvider.user;
+      if (actor == null || actor.id <= 0) {
+        throw Exception('Session expirée. Reconnectez-vous.');
+      }
+
+      final targetUserId = widget.targetUserId ?? actor.id;
+      final targetUserName = widget.targetUserName ?? actor.name;
+
       final today = DateTime.now().toIso8601String().split('T')[0];
       final medName = _medicationNameController.text;
       final durationDays = int.tryParse(_durationController.text) ?? 1;
       final doseValue = int.tryParse(_doseController.text) ?? 1;
 
-      await apiService.createOrdonnance({
-        'userId': authProvider.user!.id,
-        'title': _titleController.text,
+      final recipients = <String>[];
+      if (_phoneController.text.trim().isNotEmpty) {
+        recipients.add('+237${_phoneController.text.trim()}');
+      } else if (authProvider.user?.phone != null) {
+        recipients.add(authProvider.user!.phone!);
+      }
+
+      final titleInput = _titleController.text.trim();
+      final resolvedTitle = titleInput.isNotEmpty ? titleInput : 'Rappel — $medName';
+
+      await apiService.createOrdonnance(
+        {
+        'userId': targetUserId,
+        'title': resolvedTitle,
+        'patientName': targetUserName,
         'weight': 0,
         'categorieAge': 'adulte',
         'startDate': today,
@@ -123,25 +199,26 @@ class _CreatePrescriptionScreenState extends State<CreatePrescriptionScreen> {
           }
         ],
         'notifConfig': {
-          'recipients': [
-            if (_phoneController.text.trim().isNotEmpty)
-              '+237${_phoneController.text.trim()}'
-            else if (authProvider.user?.phone != null)
-              authProvider.user!.phone,
-          ],
+          'recipients': recipients,
           'channels': _channels.toList(),
         },
-      });
+      },
+        actorUserId: actor.id,
+      );
 
       if (_channels.contains('push')) {
-        await PushService.registerDevice(apiService, authProvider.user!.id);
+        await PushService.registerDevice(apiService, actor.id);
       }
-      await PushService.syncReminders(apiService, authProvider.user!.id);
+      await PushService.syncReminders(apiService, targetUserId);
 
       if (mounted) {
+        final methods = _channels.map(_channelLabel).join(', ');
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Rappel créé avec succès !'), backgroundColor: AppColors.success),
+          SnackBar(
+            content: Text('Rappel créé. Notifications via : $methods'),
+            backgroundColor: AppColors.success,
+          ),
         );
       }
     } catch (e) {
@@ -153,6 +230,19 @@ class _CreatePrescriptionScreenState extends State<CreatePrescriptionScreen> {
     }
   }
 
+  String _channelLabel(String id) {
+    switch (id) {
+      case 'sms':
+        return 'SMS';
+      case 'call':
+        return 'Appel';
+      case 'push':
+        return 'Push';
+      default:
+        return 'WhatsApp';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -160,238 +250,288 @@ class _CreatePrescriptionScreenState extends State<CreatePrescriptionScreen> {
       body: Column(
         children: [
           GradientHeader(
-            title: 'Nouveau rappel',
-            subtitle: 'Planifiez vos prises de médicaments',
+            title: _step == 1 ? 'Nouveau rappel' : 'Méthodes de rappel',
+            subtitle: _step == 1
+                ? (widget.targetUserId != null && widget.targetUserName != null
+                    ? 'Pour ${widget.targetUserName}'
+                    : 'Étape 1 — Médicament et horaires')
+                : 'Étape 2 — Choix des canaux (comme sur le web)',
             showBack: true,
+            bottom: _StepDots(current: _step),
           ),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    AnimatedFadeSlide(
-                      index: 0,
-                      child: AppTextField(
-                        controller: _titleController,
-                        label: 'Titre de la prescription',
-                        prefixIcon: Icons.title_rounded,
-                        validator: (v) => v == null || v.isEmpty ? 'Titre requis' : null,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    AnimatedFadeSlide(
-                      index: 1,
-                      child: Autocomplete<Map<String, dynamic>>(
-                        optionsBuilder: (TextEditingValue textEditingValue) async {
-                          if (textEditingValue.text.length < 2) {
-                            return const Iterable<Map<String, dynamic>>.empty();
-                          }
-                          final apiService = Provider.of<ApiService>(context, listen: false);
-                          try {
-                            final results = await apiService.searchMedications(textEditingValue.text);
-                            return (results['medications'] as List<dynamic>).cast<Map<String, dynamic>>();
-                          } catch (e) {
-                            return const Iterable<Map<String, dynamic>>.empty();
-                          }
-                        },
-                        displayStringForOption: (option) => option['name'] as String,
-                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                          controller.text = _medicationNameController.text;
-                          controller.addListener(() {
-                            _medicationNameController.text = controller.text;
-                          });
-                          return AppTextField(
-                            controller: controller,
-                            focusNode: focusNode,
-                            label: 'Nom du médicament',
-                            prefixIcon: Icons.medication_rounded,
-                            validator: (v) => v == null || v.isEmpty ? 'Médicament requis' : null,
-                          );
-                        },
-                        onSelected: (selection) {
-                          _medicationNameController.text = selection['name'] as String;
-                          _titleController.text = selection['name'] as String;
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    AnimatedFadeSlide(
-                      index: 2,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: AppTextField(
-                              controller: _doseController,
-                              label: 'Dose',
-                              keyboardType: TextInputType.number,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: _unit,
-                              decoration: const InputDecoration(labelText: 'Unité'),
-                              items: const [
-                                DropdownMenuItem(value: 'comprimé', child: Text('Comprimé')),
-                                DropdownMenuItem(value: 'mg', child: Text('mg')),
-                                DropdownMenuItem(value: 'ml', child: Text('ml')),
-                                DropdownMenuItem(value: 'goutte', child: Text('Goutte')),
-                              ],
-                              onChanged: (value) => setState(() => _unit = value!),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    AnimatedFadeSlide(
-                      index: 3,
-                      child: DropdownButtonFormField<String>(
-                        value: _frequencyType,
-                        decoration: const InputDecoration(labelText: 'Fréquence'),
-                        items: const [
-                          DropdownMenuItem(value: '1x', child: Text('1× / jour')),
-                          DropdownMenuItem(value: '2x', child: Text('2× / jour')),
-                          DropdownMenuItem(value: '3x', child: Text('3× / jour')),
-                          DropdownMenuItem(value: '4x', child: Text('4× / jour')),
-                          DropdownMenuItem(value: 'prn', child: Text('Au besoin')),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            _frequencyType = value!;
-                            _updateTimes();
-                          });
-                        },
-                      ),
-                    ),
-                    if (_frequencyType != 'prn') ...[
-                      const SizedBox(height: 16),
-                      ..._times.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: AnimatedFadeSlide(
-                            index: 4 + index,
-                            child: AppTextField(
-                              readOnly: true,
-                              controller: _timeControllers[index],
-                              label: 'Heure ${index + 1}',
-                              prefixIcon: Icons.access_time_rounded,
-                              onTap: () async {
-                                final timeParts = _times[index].split(':');
-                                final pickedTime = await showTimePicker(
-                                  context: context,
-                                  initialTime: TimeOfDay(
-                                    hour: int.parse(timeParts[0]),
-                                    minute: int.parse(timeParts[1]),
-                                  ),
-                                );
-                                if (pickedTime != null) {
-                                  setState(() {
-                                    final newTime =
-                                        '${pickedTime.hour.toString().padLeft(2, '0')}:${pickedTime.minute.toString().padLeft(2, '0')}';
-                                    _times[index] = newTime;
-                                    _timeControllers[index].text = newTime;
-                                  });
-                                }
-                              },
-                            ),
-                          ),
-                        );
-                      }),
-                    ],
-                    const SizedBox(height: 16),
-                    AnimatedFadeSlide(
-                      index: 8,
-                      child: AppTextField(
-                        controller: _durationController,
-                        label: 'Durée (jours)',
-                        prefixIcon: Icons.date_range_rounded,
-                        keyboardType: TextInputType.number,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) return 'Durée requise';
-                          if (int.tryParse(value) == null || int.parse(value) <= 0) return 'Nombre invalide';
-                          return null;
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    AnimatedFadeSlide(
-                      index: 8,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Canaux de notification',
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              _channelChip('sms', 'SMS', Icons.sms_rounded),
-                              _channelChip('whatsapp', 'WhatsApp', Icons.chat_rounded),
-                              _channelChip('call', 'Appel', Icons.phone_rounded),
-                              _channelChip('push', 'Push', Icons.notifications_active_rounded),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          if (_channels.any((c) => c != 'push'))
-                            AppTextField(
-                              controller: _phoneController,
-                              label: 'Téléphone destinataire',
-                              prefixIcon: Icons.phone_rounded,
-                              prefixText: '+237 ',
-                              keyboardType: TextInputType.phone,
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    PrimaryButton(
-                      label: 'Créer le rappel',
-                      icon: Icons.notifications_active_rounded,
-                      isLoading: _isLoading,
-                      onPressed: _submit,
-                    ).animate().fadeIn(delay: 500.ms),
-                  ],
-                ),
-              ),
-            ),
+            child: _step == 1 ? _buildStep1() : _buildStep2(),
           ),
         ],
       ),
     );
   }
 
-  Widget _channelChip(String id, String label, IconData icon) {
-    final selected = _channels.contains(id);
-    return FilterChip(
-      selected: selected,
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
+  Widget _buildStep1() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AnimatedFadeSlide(
+              index: 0,
+              child: AppTextField(
+                controller: _titleController,
+                label: 'Nom de l\'ordonnance (optionnel)',
+                hint: 'Ex. Traitement du matin',
+                prefixIcon: Icons.title_rounded,
+              ),
+            ),
+            const SizedBox(height: 16),
+            AnimatedFadeSlide(
+              index: 1,
+              child: Autocomplete<Map<String, dynamic>>(
+                optionsBuilder: (TextEditingValue textEditingValue) async {
+                  if (textEditingValue.text.length < 2) {
+                    return const Iterable<Map<String, dynamic>>.empty();
+                  }
+                  final apiService = Provider.of<ApiService>(context, listen: false);
+                  try {
+                    final results = await apiService.searchMedications(textEditingValue.text);
+                    return (results['medications'] as List<dynamic>?)
+                            ?.whereType<Map>()
+                            .map((e) => Map<String, dynamic>.from(e))
+                            .toList() ??
+                        const <Map<String, dynamic>>[];
+                  } catch (e) {
+                    return const Iterable<Map<String, dynamic>>.empty();
+                  }
+                },
+                displayStringForOption: (option) => option['name'] as String,
+                fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                  controller.text = _medicationNameController.text;
+                  controller.addListener(() {
+                    _medicationNameController.text = controller.text;
+                  });
+                  return AppTextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    label: 'Nom du médicament',
+                    prefixIcon: Icons.medication_rounded,
+                    validator: (v) => v == null || v.isEmpty ? 'Médicament requis' : null,
+                  );
+                },
+                onSelected: (selection) {
+                  _medicationNameController.text = selection['name'] as String;
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+            AnimatedFadeSlide(
+              index: 2,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: AppTextField(
+                      controller: _doseController,
+                      label: 'Dose',
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _unit,
+                      decoration: const InputDecoration(labelText: 'Unité'),
+                      items: const [
+                        DropdownMenuItem(value: 'comprimé', child: Text('Comprimé')),
+                        DropdownMenuItem(value: 'mg', child: Text('mg')),
+                        DropdownMenuItem(value: 'ml', child: Text('ml')),
+                        DropdownMenuItem(value: 'goutte', child: Text('Goutte')),
+                      ],
+                      onChanged: (value) => setState(() => _unit = value!),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            AnimatedFadeSlide(
+              index: 3,
+              child: DropdownButtonFormField<String>(
+                initialValue: _frequencyType,
+                decoration: const InputDecoration(labelText: 'Fréquence'),
+                items: const [
+                  DropdownMenuItem(value: '1x', child: Text('1× / jour')),
+                  DropdownMenuItem(value: '2x', child: Text('2× / jour')),
+                  DropdownMenuItem(value: '3x', child: Text('3× / jour')),
+                  DropdownMenuItem(value: '4x', child: Text('4× / jour')),
+                  DropdownMenuItem(value: 'prn', child: Text('Au besoin')),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _frequencyType = value!;
+                    _updateTimes();
+                  });
+                },
+              ),
+            ),
+            if (_frequencyType != 'prn') ...[
+              const SizedBox(height: 16),
+              ..._times.asMap().entries.map((entry) {
+                final index = entry.key;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: AnimatedFadeSlide(
+                    index: 4 + index,
+                    child: AppTextField(
+                      readOnly: true,
+                      controller: _timeControllers[index],
+                      label: 'Heure ${index + 1}',
+                      prefixIcon: Icons.access_time_rounded,
+                      onTap: () async {
+                        final timeParts = _times[index].split(':');
+                        final pickedTime = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay(
+                            hour: int.parse(timeParts[0]),
+                            minute: int.parse(timeParts[1]),
+                          ),
+                        );
+                        if (pickedTime != null) {
+                          setState(() {
+                            final newTime =
+                                '${pickedTime.hour.toString().padLeft(2, '0')}:${pickedTime.minute.toString().padLeft(2, '0')}';
+                            _times[index] = newTime;
+                            _timeControllers[index].text = newTime;
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                );
+              }),
+            ],
+            const SizedBox(height: 16),
+            AnimatedFadeSlide(
+              index: 8,
+              child: AppTextField(
+                controller: _durationController,
+                label: 'Durée (jours)',
+                prefixIcon: Icons.date_range_rounded,
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.isEmpty) return 'Durée requise';
+                  if (int.tryParse(value) == null || int.parse(value) <= 0) return 'Nombre invalide';
+                  return null;
+                },
+              ),
+            ),
+            const SizedBox(height: 32),
+            PrimaryButton(
+              label: 'Suivant — Choisir les canaux',
+              icon: Icons.arrow_forward_rounded,
+              onPressed: _goToStep2,
+            ).animate().fadeIn(delay: 400.ms),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStep2() {
+    final durationDays = int.tryParse(_durationController.text) ?? 1;
+    final totalDoses = _frequencyType == 'prn' ? 0 : _times.length * durationDays;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(icon, size: 16, color: selected ? Colors.white : AppColors.primary),
-          const SizedBox(width: 6),
-          Text(label),
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _medicationNameController.text,
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${_doseController.text} $_unit · $_frequencyType · $durationDays jour(s)',
+                  style: const TextStyle(color: AppColors.mutedForeground),
+                ),
+                if (_frequencyType != 'prn') ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Heures : ${_times.join(', ')} · ~$totalDoses rappels planifiés',
+                    style: const TextStyle(fontSize: 12, color: AppColors.mutedForeground),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          ReminderNotificationConfig(
+            channels: _channels,
+            onChannelsChanged: (next) => setState(() => _channels = next),
+            phoneController: _phoneController,
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isLoading ? null : () => setState(() => _step = 1),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  label: const Text('Retour'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: PrimaryButton(
+                  label: 'Enregistrer le rappel',
+                  icon: Icons.check_rounded,
+                  isLoading: _isLoading,
+                  onPressed: _submit,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
-      selectedColor: AppColors.primary,
-      checkmarkColor: Colors.white,
-      labelStyle: TextStyle(color: selected ? Colors.white : AppColors.foreground),
-      onSelected: (value) {
-        setState(() {
-          if (value) {
-            _channels.add(id);
-          } else if (_channels.length > 1) {
-            _channels.remove(id);
-          }
-        });
-      },
+    );
+  }
+}
+
+class _StepDots extends StatelessWidget {
+  final int current;
+
+  const _StepDots({required this.current});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _dot(1),
+        const SizedBox(width: 8),
+        _dot(2),
+      ],
+    );
+  }
+
+  Widget _dot(int step) {
+    final active = current >= step;
+    return Expanded(
+      child: Container(
+        height: 4,
+        decoration: BoxDecoration(
+          color: active ? Colors.white : Colors.white.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
     );
   }
 }

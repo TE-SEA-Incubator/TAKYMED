@@ -9,11 +9,9 @@ import {
   Pill,
   Info,
   AlertTriangle,
-  Stethoscope,
   Plus,
   Bookmark,
   ChevronRight,
-  Filter,
   MapPin,
   Navigation,
   Store,
@@ -22,21 +20,8 @@ import {
 } from "lucide-react";
 import { cn, resolveMedicationPhotoUrl } from "@/lib/utils";
 import { toast } from "sonner";
-
-const MOCK_MEDICATIONS = [
-  { id: 1, name: "Doliprane 1000", type: "comprimé", description: "Paracétamol, indiqué en cas de douleur et/ou fièvre.", mode: "orale", moment: "indifferent", precautions: "aucune" },
-  { id: 2, name: "Amoxicilline 500", type: "gelule", description: "Antibiotique de la famille des pénicillines.", mode: "orale", moment: "pendant_repas", precautions: "aucune" },
-  { id: 3, name: "Ventoline", type: "spray", description: "Traitement de fond de l'asthme.", mode: "inhalation", moment: "indifferent", precautions: "aucune" },
-  { id: 4, name: "Spasfon", type: "comprimé", description: "Traitement des douleurs spasmodiques.", mode: "orale", moment: "avant_repas", precautions: "aucune" },
-  { id: 5, name: "Maxilase", type: "sirop", description: "Indiqué en cas d'oedèmes de la gorge.", mode: "orale", moment: "apres_repas", precautions: "aucune" },
-  { id: 6, name: "Gaviscon", type: "sirop", description: "Remontées acides et brûlures d'estomac.", mode: "orale", moment: "apres_repas", precautions: "aucune" },
-];
-
-const MOCK_PHARMACIES = [
-  { id: 1, name: "Pharmacie de la Paix", address: "Bonapriso, Douala", phone: "+237 6001", distance: 1.2, stocks: [1, 2, 4] },
-  { id: 2, name: "Pharmacie Saint Jean", address: "Akwa, Douala", phone: "+237 6002", distance: 3.5, stocks: [1, 3, 5] },
-  { id: 3, name: "Pharmacie du Littoral", address: "Deido, Douala", phone: "+237 6003", distance: 0.8, stocks: [2, 3, 6] },
-];
+import { PageShell } from "@/components/app/PageShell";
+import { PageHeader } from "@/components/app/PageHeader";
 
 export default function SearchMedications() {
   const { user } = useAuth();
@@ -47,7 +32,10 @@ export default function SearchMedications() {
   const [selectedMed, setSelectedMed] = useState<any | null>(null);
   const [pharmaciesWithStock, setPharmaciesWithStock] = useState<any[]>([]);
   const [pharmaciesOnDuty, setPharmaciesOnDuty] = useState<any[]>([]);
-  const [pharmacyTab, setPharmacyTab] = useState<"stock" | "garde">("stock");
+  const [pharmacyTab, setPharmacyTab] = useState<"stock" | "garde">("garde");
+  const [mainSection, setMainSection] = useState<"medications" | "pharmacies">("medications");
+  const [pharmacyQuery, setPharmacyQuery] = useState("");
+  const [loadingPharmacies, setLoadingPharmacies] = useState(false);
   const [locationCity, setLocationCity] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isFindingLocation, setIsFindingLocation] = useState(false);
@@ -162,39 +150,56 @@ export default function SearchMedications() {
       )
     : [];
 
-  // Fetch pharmacies when a medication is selected (stock + garde)
+  // Fetch pharmacies (garde + stock) when on pharmacy section
+  const fetchNearbyPharmacies = async (medId?: number) => {
+    setLoadingPharmacies(true);
+    let url = `/api/pharmacies/nearby?limit=40`;
+    if (userLocation) {
+      url += `&lat=${userLocation.lat}&lng=${userLocation.lng}`;
+    }
+    const effectiveMedId = medId ?? selectedMed?.id;
+    if (effectiveMedId) {
+      url += `&medId=${effectiveMedId}`;
+    }
+
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        const normalized = normalizeNearbyPharmacies(data);
+        setPharmaciesWithStock(normalized.withStock);
+        setPharmaciesOnDuty(normalized.onDuty);
+        setLocationCity(normalized.city);
+      } else if (res.headers.get("content-type")?.includes("application/json")) {
+        const err = await res.json();
+        toast.error(err.error ?? "Erreur recherche pharmacies");
+      }
+    } catch (err) {
+      console.error("Error fetching pharmacies:", err);
+    } finally {
+      setLoadingPharmacies(false);
+    }
+  };
+
   useEffect(() => {
-    if (!selectedMed) {
-      setPharmaciesWithStock([]);
-      setPharmaciesOnDuty([]);
-      return;
-    }
+    if (mainSection !== "pharmacies") return;
+    fetchNearbyPharmacies();
+  }, [mainSection, userLocation, selectedMed?.id]);
 
-    async function fetchPharmacies() {
-      let url = `/api/pharmacies/nearby?medId=${selectedMed.id}`;
-      if (userLocation) {
-        url += `&lat=${userLocation.lat}&lng=${userLocation.lng}`;
-      }
+  const filterPharmacies = (list: any[]) => {
+    const q = pharmacyQuery.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(
+      (p) =>
+        String(p.name ?? "").toLowerCase().includes(q) ||
+        String(p.address ?? "").toLowerCase().includes(q),
+    );
+  };
 
-      try {
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
-          const normalized = normalizeNearbyPharmacies(data);
-          setPharmaciesWithStock(normalized.withStock);
-          setPharmaciesOnDuty(normalized.onDuty);
-          setLocationCity(normalized.city);
-        } else if (res.headers.get("content-type")?.includes("application/json")) {
-          const err = await res.json();
-          toast.error(err.error ?? "Erreur recherche pharmacies");
-        }
-      } catch (err) {
-        console.error("Error fetching pharmacies:", err);
-      }
-    }
-
-    fetchPharmacies();
-  }, [selectedMed, userLocation]);
+  const openPharmaciesSection = (stockTab = false) => {
+    setMainSection("pharmacies");
+    setPharmacyTab(stockTab ? "stock" : "garde");
+  };
 
   const handleGetLocation = () => {
     setIsFindingLocation(true);
@@ -205,6 +210,9 @@ export default function SearchMedications() {
           setUserLocation(coords);
           setIsFindingLocation(false);
           toast.success("Position récupérée !");
+          if (mainSection === "pharmacies") {
+            fetchNearbyPharmacies();
+          }
         },
         (error) => {
           console.warn("Geolocation error:", error.message);
@@ -222,113 +230,173 @@ export default function SearchMedications() {
     }
   };
 
-  return (
-    <div className="bg-slate-50 min-h-[calc(100vh-64px)] pb-20">
-      <div className="container mx-auto px-4 py-12">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-extrabold tracking-tight mb-4">{t('search.title')}</h1>
-          <p className="text-muted-foreground max-w-lg mx-auto">
-            Trouvez les informations et vérifiez la disponibilité dans les pharmacies les plus proches.
-          </p>
-        </div>
+  const pharmacyList = filterPharmacies(
+    pharmacyTab === "stock" ? pharmaciesWithStock : pharmaciesOnDuty,
+  );
 
-        <div className="max-w-6xl mx-auto space-y-12">
-          {/* Search & Location Row */}
-          <div className="flex flex-col md:flex-row gap-4 items-center group">
-            <div className="relative flex-1 w-full flex items-center bg-white border rounded-[30px] p-2 shadow-sm focus-within:ring-2 focus-within:ring-primary/20 transition-all">
-              <Search className="ml-4 h-6 w-6 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={t('search.searchPlaceholder')}
-                className="border-none text-xl h-14 focus-visible:ring-0 bg-transparent rounded-none"
-              />
-              {loading && (
-                <div className="mr-4 animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
-              )}
-            </div>
-            <Button
-              onClick={handleGetLocation}
-              disabled={isFindingLocation}
-              variant="outline"
-              className="h-16 px-8 rounded-[30px] font-bold gap-2 border-primary/20 hover:bg-primary/5 text-primary"
-            >
-              <Navigation className={cn("w-5 h-5", isFindingLocation && "animate-spin")} />
-              {userLocation ? `Position ok${locationCity ? ` · ${locationCity}` : ""}` : "Pharmacies à proximité"}
-            </Button>
+  const renderPharmacyCard = (p: any, isGarde: boolean) => (
+    <div
+      key={p.id}
+      className={cn(
+        "p-6 rounded-3xl border space-y-4 hover:border-primary/50 transition-all",
+        isGarde ? "border-amber-100 bg-amber-50/50" : "border-slate-100 bg-slate-50",
+      )}
+    >
+      <div className="flex justify-between items-start gap-2">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            {isGarde && (
+              <span className="text-[10px] font-black uppercase bg-amber-500 text-white px-2 py-0.5 rounded-md">
+                De garde
+              </span>
+            )}
+            <h4 className="font-bold text-lg">{p.name}</h4>
+          </div>
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <MapPin className="w-3 h-3 shrink-0" />
+            {p.address}
+          </div>
+        </div>
+        {p.distance != null && (
+          <div className="bg-white px-2 py-1 rounded-lg border text-[10px] font-bold text-primary shrink-0">
+            {p.distance} km
+          </div>
+        )}
+      </div>
+      <div className="flex items-center justify-between pt-2">
+        {!isGarde ? (
+          <div className="flex items-center gap-1 text-green-600 font-bold text-xs">
+            <CheckCircle2 className="w-4 h-4" />
+            En stock ({p.quantity} unités)
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 text-amber-600 font-bold text-xs">
+            <Clock className="w-4 h-4" />
+            {p.status || "Ouverte"}
+          </div>
+        )}
+        <Button asChild variant="ghost" className="h-8 rounded-xl text-xs font-bold gap-2">
+          <a href={`tel:${p.phone?.replace(/\s+/g, "")}`}>{p.phone || "Appeler"}</a>
+        </Button>
+      </div>
+    </div>
+  );
+
+  return (
+    <PageShell maxWidth="2xl">
+      <PageHeader
+        badge="Recherche"
+        title={t("search.title")}
+        subtitle="Médicaments, stocks et pharmacies de garde près de chez vous."
+      />
+
+      {/* Section principale : Médicaments | Pharmacies */}
+      <div className="mb-8 flex rounded-2xl bg-slate-100 p-1">
+        <button
+          type="button"
+          onClick={() => setMainSection("medications")}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all",
+            mainSection === "medications"
+              ? "bg-white text-primary shadow-sm"
+              : "text-muted-foreground hover:text-primary",
+          )}
+        >
+          <Pill className="h-4 w-4" />
+          Médicaments
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMainSection("pharmacies");
+            setPharmacyTab("garde");
+          }}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all",
+            mainSection === "pharmacies"
+              ? "bg-white text-amber-600 shadow-sm"
+              : "text-muted-foreground hover:text-amber-600",
+          )}
+        >
+          <Store className="h-4 w-4" />
+          Pharmacies
+        </button>
+      </div>
+
+      {mainSection === "medications" ? (
+        <div className="space-y-8">
+          <div className="relative flex w-full items-center rounded-[30px] border bg-white p-2 shadow-sm focus-within:ring-2 focus-within:ring-primary/20">
+            <Search className="ml-4 h-6 w-6 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t("search.searchPlaceholder")}
+              className="h-14 border-none bg-transparent text-xl focus-visible:ring-0"
+            />
+            {loading && (
+              <div className="mr-4 h-5 w-5 animate-spin rounded-full border-b-2 border-primary" />
+            )}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Results List */}
-            <div className="lg:col-span-4 space-y-4">
-              <div className="flex items-center justify-between px-2 text-sm text-muted-foreground mb-2">
-                <span>{medications.length} médicaments trouvés</span>
+          <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
+            <div className="space-y-4 lg:col-span-4">
+              <div className="mb-2 flex items-center justify-between px-2 text-sm text-muted-foreground">
+                <span>{medications.length} médicament(s)</span>
               </div>
               <div className="space-y-3">
-                {medications.map(m => {
+                {medications.map((m) => {
                   const photoSrc = resolveMedicationPhotoUrl(m.photoUrl);
                   return (
-                  <button
-                    key={m.id}
-                    onClick={() => setSelectedMed(m)}
-                    className={cn(
-                      "w-full flex items-center gap-4 p-4 rounded-3xl border bg-white transition-all text-left hover:border-primary/50",
-                      selectedMed?.id === m.id ? "border-primary ring-4 ring-primary/5 bg-primary/5" : "border-slate-100"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-14 h-14 rounded-2xl overflow-hidden shrink-0 flex items-center justify-center transition-colors",
-                      selectedMed?.id === m.id ? "ring-2 ring-primary" : "bg-slate-100"
-                    )}>
-                      {photoSrc ? (
-                        <img
-                          src={photoSrc}
-                          alt={m.name}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = "none";
-                            (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
-                          }}
-                        />
-                      ) : null}
-                      <div className={cn(
-                        "w-full h-full flex items-center justify-center",
-                        selectedMed?.id === m.id ? "bg-primary text-white" : "bg-slate-100 text-slate-400",
-                        photoSrc ? "hidden" : ""
-                      )}>
-                        <Pill className="w-6 h-6" />
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setSelectedMed(m)}
+                      className={cn(
+                        "flex w-full items-center gap-4 rounded-3xl border bg-white p-4 text-left transition-all hover:border-primary/50",
+                        selectedMed?.id === m.id
+                          ? "border-primary bg-primary/5 ring-4 ring-primary/5"
+                          : "border-slate-100",
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl",
+                          selectedMed?.id === m.id ? "ring-2 ring-primary" : "bg-slate-100",
+                        )}
+                      >
+                        {photoSrc ? (
+                          <img src={photoSrc} alt={m.name} className="h-full w-full object-cover" loading="lazy" />
+                        ) : (
+                          <Pill className="h-6 w-6 text-slate-400" />
+                        )}
                       </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold truncate">{m.name}</h3>
-                      <p className="text-xs text-muted-foreground uppercase">{m.type || "médicament"}</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-slate-300" />
-                  </button>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate font-bold">{m.name}</h3>
+                        <p className="text-xs uppercase text-muted-foreground">{m.type || "médicament"}</p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-slate-300" />
+                    </button>
                   );
                 })}
                 {query && medications.length === 0 && !loading && (
                   <div className="space-y-4 py-4">
-                    <p className="text-center text-muted-foreground">Aucun médicament trouvé dans la base.</p>
+                    <p className="text-center text-muted-foreground">Aucun médicament trouvé.</p>
                     {!aiResult && (
                       <Button
                         onClick={searchWithAI}
                         disabled={aiLoading}
-                        className="w-full rounded-2xl h-12 font-bold bg-violet-600 hover:bg-violet-700"
+                        className="h-12 w-full rounded-2xl bg-violet-600 font-bold hover:bg-violet-700"
                       >
                         {aiLoading ? "Recherche IA..." : "Rechercher avec l'IA"}
                       </Button>
                     )}
                     {aiResult && (
-                      <div className="bg-violet-50 border border-violet-100 rounded-3xl p-6 space-y-3 text-left">
-                        <div className="inline-flex items-center px-3 py-1 rounded-full bg-violet-100 text-violet-700 text-xs font-bold uppercase">
+                      <div className="space-y-3 rounded-3xl border border-violet-100 bg-violet-50 p-6 text-left">
+                        <div className="inline-flex items-center rounded-full bg-violet-100 px-3 py-1 text-xs font-bold uppercase text-violet-700">
                           Résultat IA
                         </div>
                         <h3 className="text-xl font-bold">{aiResult.name}</h3>
                         <p className="text-sm text-muted-foreground">{aiResult.description}</p>
-                        {aiResult.dosage && <p className="text-sm"><span className="font-bold">Dosage :</span> {aiResult.dosage}</p>}
-                        {aiResult.precautions && <p className="text-sm"><span className="font-bold">Précautions :</span> {aiResult.precautions}</p>}
                       </div>
                     )}
                   </div>
@@ -336,218 +404,170 @@ export default function SearchMedications() {
               </div>
             </div>
 
-            {/* Detail View & Availability */}
-            <div className="lg:col-span-8 space-y-8">
+            <div className="space-y-8 lg:col-span-8">
               {selectedMed ? (
                 <>
-                  {/* Med Info Card */}
-                  <div className="bg-white rounded-[40px] border shadow-sm p-8 space-y-8 animate-in slide-in-from-right-4 duration-500">
+                  <div className="animate-in slide-in-from-right-4 space-y-8 rounded-[40px] border bg-white p-8 shadow-sm duration-500">
                     {resolveMedicationPhotoUrl(selectedMed.photoUrl) && (
-                      <div className="w-full h-52 rounded-3xl overflow-hidden bg-slate-100">
+                      <div className="h-52 w-full overflow-hidden rounded-3xl bg-slate-100">
                         <img
                           src={resolveMedicationPhotoUrl(selectedMed.photoUrl)!}
                           alt={selectedMed.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).parentElement!.classList.add("hidden");
-                          }}
+                          className="h-full w-full object-cover"
                         />
                       </div>
                     )}
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
                       <div className="space-y-2">
-                        <div className="inline-flex items-center px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider mb-2">
+                        <div className="mb-2 inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-primary">
                           {selectedMed.type || "médicament"}
                         </div>
-                        <h2 className="text-4xl font-extrabold text-foreground">{selectedMed.name}</h2>
-                        <div className="text-2xl font-bold text-primary">
-                          {selectedMed.price ? `${selectedMed.price}` : "Prix non défini"}
-                        </div>
+                        <h2 className="text-4xl font-extrabold">{selectedMed.name}</h2>
                       </div>
                       <div className="flex gap-3">
                         <Button
                           variant="outline"
                           size="icon"
-                          className={cn("rounded-2xl h-12 w-12 border-slate-200 transition-colors", bookmarks.includes(selectedMed.id) && "bg-amber-50 border-amber-200 text-amber-500")}
+                          className={cn(
+                            "h-12 w-12 rounded-2xl",
+                            bookmarks.includes(selectedMed.id) && "border-amber-200 bg-amber-50 text-amber-500",
+                          )}
                           onClick={() => toggleBookmark(selectedMed.id)}
                         >
-                          <Bookmark className={cn("w-5 h-5", bookmarks.includes(selectedMed.id) && "fill-current")} />
+                          <Bookmark className={cn("h-5 w-5", bookmarks.includes(selectedMed.id) && "fill-current")} />
                         </Button>
-                        <Button
-                          className="rounded-2xl h-12 px-6 font-bold bg-primary shadow-lg shadow-primary/20"
-                          onClick={handleAddToTreatment}
-                        >
-                          <Plus className="w-4 h-4 mr-2" />
+                        <Button className="h-12 rounded-2xl px-6 font-bold shadow-lg shadow-primary/20" onClick={handleAddToTreatment}>
+                          <Plus className="mr-2 h-4 w-4" />
                           Ajouter au traitement
                         </Button>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
                       <div className="space-y-4">
-                        <div className="flex items-center gap-2 text-primary font-bold">
-                          <Info className="w-5 h-5" />
-                          <span>Description</span>
+                        <div className="flex items-center gap-2 font-bold text-primary">
+                          <Info className="h-5 w-5" />
+                          Description
                         </div>
-                        <p className="text-muted-foreground leading-relaxed">
-                          {selectedMed.description || "Aucune description disponible pour ce médicament."}
+                        <p className="leading-relaxed text-muted-foreground">
+                          {selectedMed.description || "Aucune description disponible."}
                         </p>
                       </div>
                       <div className="space-y-4">
-                        <div className="flex items-center gap-2 text-amber-600 font-bold">
-                          <AlertTriangle className="w-5 h-5" />
-                          <span>Précautions & Incompatibilités</span>
+                        <div className="flex items-center gap-2 font-bold text-amber-600">
+                          <AlertTriangle className="h-5 w-5" />
+                          Précautions
                         </div>
-                        <div className="space-y-3">
-                          {((selectedMed.precautions && selectedMed.precautions !== 'aucune') || (!relevantInteractions.length)) && (
-                            <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 text-sm text-amber-800">
-                              <span className="font-bold opacity-60 block mb-1">RECOMMANDATIONS :</span>
-                              {selectedMed.precautions && selectedMed.precautions !== 'aucune' 
-                                ? selectedMed.precautions 
-                                : "Aucune précaution spécifique enregistrée."
-                              }
-                              <div className="mt-2 font-bold opacity-80">
-                                {selectedMed.mode && `Mode: ${selectedMed.mode}`}
-                                {selectedMed.moment && selectedMed.moment !== 'indifferent' && ` • Moment: ${selectedMed.moment}`}
-                              </div>
+                        {relevantInteractions.length > 0 ? (
+                          relevantInteractions.map((inter, idx) => (
+                            <div key={idx} className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm">
+                              <p className="font-bold">Incompatibilité : {inter.med1Name} / {inter.med2Name}</p>
+                              <p className="mt-1 opacity-80">{inter.description}</p>
                             </div>
-                          )}
-
-                          {relevantInteractions.length > 0 && (
-                            <div className="space-y-2">
-                              <span className="text-xs font-bold text-destructive uppercase tracking-wider ml-1">Incompatibilités détectées :</span>
-                              {relevantInteractions.map((inter, idx) => {
-                                const otherMed = inter.med1Name.toLowerCase() === selectedMed.name.toLowerCase() ? inter.med2Name : inter.med1Name;
-                                return (
-                                  <div key={idx} className={cn(
-                                    "p-4 rounded-2xl border flex gap-3",
-                                    inter.riskLevel === 'critique' ? "bg-red-50 border-red-100 text-red-900" :
-                                    inter.riskLevel === 'eleve' ? "bg-orange-50 border-orange-100 text-orange-900" :
-                                    "bg-amber-50 border-amber-100 text-amber-900"
-                                  )}>
-                                    <AlertTriangle className="w-5 h-5 shrink-0" />
-                                    <div>
-                                      <p className="font-bold">Ne pas mélanger avec : {otherMed}</p>
-                                      <p className="text-xs opacity-80 mt-1">{inter.description}</p>
-                                      <div className={cn(
-                                        "inline-block mt-2 px-2 py-0.5 rounded text-[10px] font-black uppercase",
-                                        inter.riskLevel === 'critique' ? "bg-red-600 text-white" : 
-                                        inter.riskLevel === 'eleve' ? "bg-orange-500 text-white" : "bg-amber-500 text-white"
-                                      )}>
-                                        Risque {inter.riskLevel}
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Availability Card */}
-                  <div className="bg-white rounded-[40px] border shadow-sm p-8 space-y-6">
-                    <div className="flex items-center justify-between flex-wrap gap-4">
-                      <h3 className="text-2xl font-bold flex items-center gap-3">
-                        <Store className="w-6 h-6 text-primary" />
-                        Pharmacies proches
-                      </h3>
-                      <div className="flex bg-slate-100 p-1 rounded-2xl">
-                        <button
-                          type="button"
-                          onClick={() => setPharmacyTab("stock")}
-                          className={cn(
-                            "px-4 py-2 rounded-xl text-sm font-bold transition-all",
-                            pharmacyTab === "stock" ? "bg-white shadow text-primary" : "text-muted-foreground"
-                          )}
-                        >
-                          Avec stock ({pharmaciesWithStock.length})
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPharmacyTab("garde")}
-                          className={cn(
-                            "px-4 py-2 rounded-xl text-sm font-bold transition-all",
-                            pharmacyTab === "garde" ? "bg-white shadow text-amber-600" : "text-muted-foreground"
-                          )}
-                        >
-                          De garde ({pharmaciesOnDuty.length})
-                        </button>
+                          ))
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            {selectedMed.precautions && selectedMed.precautions !== "aucune"
+                              ? selectedMed.precautions
+                              : "Aucune précaution spécifique enregistrée."}
+                          </p>
+                        )}
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {(pharmacyTab === "stock" ? pharmaciesWithStock : pharmaciesOnDuty).map((p: any) => (
-                        <div key={p.id} className={cn(
-                          "p-6 rounded-3xl border space-y-4 hover:border-primary/50 transition-all",
-                          pharmacyTab === "garde" ? "border-amber-100 bg-amber-50/50" : "border-slate-100 bg-slate-50"
-                        )}>
-                          <div className="flex justify-between items-start gap-2">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                {pharmacyTab === "garde" && (
-                                  <span className="text-[10px] font-black uppercase bg-amber-500 text-white px-2 py-0.5 rounded-md">De garde</span>
-                                )}
-                                <h4 className="font-bold text-lg">{p.name}</h4>
-                              </div>
-                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                <MapPin className="w-3 h-3 shrink-0" />
-                                {p.address}
-                              </div>
-                            </div>
-                            {p.distance != null && (
-                              <div className="bg-white px-2 py-1 rounded-lg border text-[10px] font-bold text-primary shrink-0">
-                                {p.distance} km
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex items-center justify-between pt-2">
-                            {pharmacyTab === "stock" ? (
-                              <div className="flex items-center gap-1 text-green-600 font-bold text-xs">
-                                <CheckCircle2 className="w-4 h-4" />
-                                En stock ({p.quantity} unités)
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1 text-amber-600 font-bold text-xs">
-                                <Clock className="w-4 h-4" />
-                                {p.status || "Ouverte"}
-                              </div>
-                            )}
-                            <Button asChild variant="ghost" className="h-8 rounded-xl text-xs font-bold gap-2">
-                              <a href={`tel:${p.phone?.replace(/\s+/g, '')}`}>
-                                {p.phone || "Appeler"}
-                              </a>
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                      {(pharmacyTab === "stock" ? pharmaciesWithStock : pharmaciesOnDuty).length === 0 && (
-                        <div className="md:col-span-2 p-12 text-center text-muted-foreground bg-slate-50 rounded-[30px] border border-dashed">
-                          {pharmacyTab === "stock"
-                            ? t('search.noResults')
-                            : `Aucune pharmacie de garde${!userLocation ? " — activez votre position" : ""}`}
-                        </div>
-                      )}
-                    </div>
+                    <Button
+                      variant="outline"
+                      className="h-12 w-full rounded-2xl font-bold"
+                      onClick={() => openPharmaciesSection(true)}
+                    >
+                      <Store className="mr-2 h-4 w-4" />
+                      Voir disponibilité en pharmacie
+                    </Button>
                   </div>
                 </>
               ) : (
-                <div className="h-[500px] bg-white rounded-[40px] border border-dashed border-slate-200 flex flex-col items-center justify-center text-center p-12 space-y-4 opacity-50">
-                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-slate-300">
-                    <Pill className="w-10 h-10" />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="font-bold text-slate-600">Sélectionnez un médicament</p>
-                    <p className="text-sm text-slate-400">Pour voir sa description et ses stocks en pharmacie.</p>
-                  </div>
+                <div className="flex h-[420px] flex-col items-center justify-center rounded-[40px] border border-dashed border-slate-200 bg-white p-12 text-center opacity-60">
+                  <Pill className="mb-4 h-12 w-12 text-slate-300" />
+                  <p className="font-bold text-slate-600">Sélectionnez un médicament</p>
+                  <p className="text-sm text-slate-400">Consultez la fiche et les stocks disponibles.</p>
                 </div>
               )}
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      ) : (
+        <div className="space-y-6">
+          <div className="flex flex-col gap-4 md:flex-row">
+            <Button
+              onClick={handleGetLocation}
+              disabled={isFindingLocation}
+              variant="outline"
+              className="h-14 flex-1 rounded-2xl border-primary/20 font-bold text-primary hover:bg-primary/5"
+            >
+              <Navigation className={cn("mr-2 h-5 w-5", isFindingLocation && "animate-spin")} />
+              {userLocation
+                ? `Ma position${locationCity ? ` · ${locationCity}` : ""}`
+                : "Utiliser ma position"}
+            </Button>
+            <div className="relative flex flex-[2] items-center rounded-2xl border bg-white p-2 shadow-sm">
+              <Search className="ml-3 h-5 w-5 text-muted-foreground" />
+              <Input
+                value={pharmacyQuery}
+                onChange={(e) => setPharmacyQuery(e.target.value)}
+                placeholder="Filtrer par nom ou adresse…"
+                className="h-12 border-none bg-transparent focus-visible:ring-0"
+              />
+            </div>
+          </div>
+
+          {selectedMed && (
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm font-semibold text-primary">
+              Stock pour : {selectedMed.name}
+            </div>
+          )}
+
+          <div className="flex rounded-2xl bg-slate-100 p-1">
+            <button
+              type="button"
+              onClick={() => setPharmacyTab("garde")}
+              className={cn(
+                "flex-1 rounded-xl py-2.5 text-sm font-bold transition-all",
+                pharmacyTab === "garde" ? "bg-white text-amber-600 shadow" : "text-muted-foreground",
+              )}
+            >
+              De garde ({pharmaciesOnDuty.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setPharmacyTab("stock")}
+              className={cn(
+                "flex-1 rounded-xl py-2.5 text-sm font-bold transition-all",
+                pharmacyTab === "stock" ? "bg-white text-primary shadow" : "text-muted-foreground",
+              )}
+            >
+              Avec stock ({pharmaciesWithStock.length})
+            </button>
+          </div>
+
+          {loadingPharmacies ? (
+            <div className="flex justify-center py-20">
+              <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-primary" />
+            </div>
+          ) : pharmacyList.length === 0 ? (
+            <div className="rounded-[30px] border border-dashed bg-slate-50 p-12 text-center text-muted-foreground">
+              {pharmacyTab === "stock"
+                ? selectedMed
+                  ? t("search.noResults")
+                  : "Sélectionnez un médicament dans l'onglet Médicaments pour voir les stocks."
+                : `Aucune pharmacie de garde${!userLocation ? " — activez votre position pour affiner" : ""}`}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {pharmacyList.map((p) => renderPharmacyCard(p, pharmacyTab === "garde"))}
+            </div>
+          )}
+        </div>
+      )}
+    </PageShell>
   );
 }

@@ -1,172 +1,192 @@
 # GitHub Actions — TAKYMED
 
-Deux workflows séparés pour le dépôt [TE-SEA-Incubator/TAKYMED](https://github.com/TE-SEA-Incubator/TAKYMED.git) :
+Dépôt : [TE-SEA-Incubator/TAKYMED](https://github.com/TE-SEA-Incubator/TAKYMED.git)
 
 | Workflow | Fichier | Rôle |
 |----------|---------|------|
-| **Deploy (push.sh)** | `deploy.yml` | Déploie le serveur web/API via `scripts/push.sh` |
-| **Build APK Release** | `build-apk.yml` | Build l’APK Android (`npm run apk`) et la met en artifact |
+| **Build Android Release** | `build-android.yml` | APK + AAB **même version** (push `mobile/**`) |
+| **Build AAB Release** | `build-aab.yml` | AAB Play Store uniquement (manuel) |
+| **Build APK Release** | `build-apk.yml` | APK uniquement (manuel, legacy) |
+| **Déploiement serveur** | — | **Uniquement en local** via `./scripts/push.sh` |
 
 ---
 
-## 1. Configuration GitHub (obligatoire)
+## 1. Configuration du dépôt GitHub
 
-Dans le dépôt GitHub : **Settings → Secrets and variables → Actions → Secrets**
-
-### Secret principal : `ENV_FILE`
-
-**Un seul secret** contient **tout** le contenu de votre fichier `.env` (ligne par ligne).
-
-1. Ouvrez votre `.env` local (ou copiez depuis `.env.example`)
-2. Remplissez toutes les valeurs (serveur, clés API, etc.)
-3. Copiez **l’intégralité** du fichier
-4. GitHub → **New repository secret** → nom : `ENV_FILE` → collez le contenu
-
-Exemple minimal :
-
-```env
-SERVER_IP=82.165.150.150
-SERVER_USER=root
-SERVER_PASS=votre_mot_de_passe_ssh
-DEST_DIR=/home/TAKYMED
-PORT=3500
-DOMAIN=dev.takymed.com
-PING_MESSAGE="TAKYMED API is running"
-DB_PATH=./bd.sqlite
-NODE_ENV=production
-GEMINI_API_KEY=votre_cle_gemini
-```
-
-> **Important :** utilisez un **Secret** (pas une Variable). Les Variables GitHub sont visibles en clair dans l’interface ; le `.env` contient des mots de passe et clés API.
-
-Le workflow écrit ce contenu dans `.env` avant le déploiement, puis `push.sh` le copie sur le serveur.
-
-### Secret SSH (recommandé en plus de ENV_FILE)
-
-| Nom | Obligatoire | Description |
-|-----|-------------|-------------|
-| `SSH_PRIVATE_KEY` | Recommandé | Clé privée SSH (`-----BEGIN ... KEY-----`) |
-
-Authentification SSH :
-- **Recommandé :** `SSH_PRIVATE_KEY` + `SERVER_IP` / `SERVER_USER` dans `ENV_FILE`
-- **Alternative :** `SERVER_PASS` dans `ENV_FILE` (sans clé SSH)
-
----
-
-## 2. Préparer le serveur (une seule fois)
-
-### Générer une clé SSH pour GitHub Actions
+### Accès et remote
 
 ```bash
-ssh-keygen -t ed25519 -C "github-actions-takymed" -f ~/.ssh/takymed-gha -N ""
-ssh-copy-id -i ~/.ssh/takymed-gha.pub root@82.165.150.150
-cat ~/.ssh/takymed-gha   # → secret SSH_PRIVATE_KEY
+git remote set-url origin https://github.com/TE-SEA-Incubator/TAKYMED.git
+git remote -v
 ```
 
-Le serveur doit avoir Node.js 20+ et PM2. Le `.env` est **déployé automatiquement** à chaque run via le secret `ENV_FILE`.
+Le compte GitHub utilisé doit avoir les droits **Write** sur l’organisation `TE-SEA-Incubator`.
+
+### Activer GitHub Actions
+
+1. GitHub → dépôt **TAKYMED**
+2. **Settings → Actions → General**
+3. **Allow all actions and reusable workflows**
+4. Enregistrer
+
+### Branche principale
+
+La branche suivie est **`master`** (ou `main`). Les workflows APK se déclenchent sur push vers cette branche.
 
 ---
 
-## 3. Workflow Deploy (`deploy.yml`)
+## 2. Secrets GitHub
 
-**Déclencheurs :**
-- Push sur `main` ou `master`
-- Lancement manuel : **Actions → Deploy (push.sh) → Run workflow**
+**Aucun secret n’est requis** pour le workflow APK actuel.
 
-**Ce qu’il fait :**
-1. Reconstruit `.env` depuis le secret `ENV_FILE`
-2. Connexion SSH au serveur
-3. `scripts/push.sh` : rsync code, copie `.env`, build distant, PM2, health check
+Les secrets `ENV_FILE` et `SSH_PRIVATE_KEY` ne servent **plus** sur GitHub : ils restent dans votre fichier **`.env` local** pour `./scripts/push.sh`.
 
-**Clés lues depuis `ENV_FILE` :**
+> Ne commitez jamais le fichier `.env`.
 
-| Clé `.env` | Usage |
-|------------|--------|
+---
+
+## 3. Déploiement serveur (local uniquement)
+
+Le script `scripts/push.sh` **n’est plus exécuté par GitHub Actions**.
+
+### Prérequis locaux
+
+1. Copier le modèle : `cp .env.example .env`
+2. Remplir `.env` (serveur, clés API, etc.)
+3. Accès SSH au serveur (mot de passe dans `SERVER_PASS` ou clé SSH locale)
+
+### Déployer
+
+```bash
+cd ~/Documents/CODES/TAKYMED/TAKYMED
+./scripts/push.sh
+```
+
+Le script :
+- rsync le code vers le serveur (`DEST_DIR`)
+- copie le `.env` local sur le serveur
+- build Node.js distant + redémarrage PM2
+
+### Clés importantes dans `.env`
+
+| Clé | Usage |
+|-----|--------|
 | `SERVER_IP` | IP / hostname SSH |
-| `SERVER_USER` | Utilisateur SSH |
-| `SERVER_PASS` | Mot de passe SSH (si pas de clé) |
-| `DEST_DIR` | Dossier distant (`/home/TAKYMED`) |
-| `PORT` | Port API Node |
-| `DOMAIN` | Domaine (logs + health check) |
-| `GEMINI_API_KEY`, etc. | Config application sur le serveur |
+| `SERVER_USER` | Utilisateur SSH (ex. `root`) |
+| `SERVER_PASS` | Mot de passe SSH (optionnel si clé SSH) |
+| `DEST_DIR` | Dossier distant (ex. `/home/TAKYMED`) |
+| `PORT` | Port API (ex. `3500`) |
+| `DOMAIN` | Domaine (ex. `dev.takymed.com`) |
+| `GEMINI_API_KEY` | Recherche IA médicaments |
 
 ---
 
-## 4. Workflow Build APK (`build-apk.yml`)
+## 4. Builds Android (APK / AAB)
 
-**Déclencheurs :**
-- Push sur `main` / `master` si fichiers `mobile/**` modifiés
-- Lancement manuel : **Actions → Build APK Release → Run workflow**
+### Version automatique (source unique)
 
-**Ce qu’il fait :**
-1. Installe Node.js, Java 17, Flutter stable
-2. Lance `npm run apk` (incrémente la version + build release)
-3. Publie `takymed.apk` en **artifact** téléchargeable
+Fichier : `mobile/pubspec.yaml` → `version: X.Y.Z+N`
+
+| Champ | Usage |
+|-------|--------|
+| `X.Y.Z` | versionName (affichée utilisateur, GitHub, écran Paramètres) |
+| `N` | versionCode Android (Play Store, interne — non affiché) |
+
+Script : `scripts/bump-mobile-version.mjs` — incrémente patch **et** build (+1) à chaque bump.
+
+Lecture : `scripts/read-mobile-version.mjs --display` → `1.0.3` (GitHub Artifacts, résumés CI).  
+Le suffixe `+N` reste interne (versionCode Play Store).
+
+### Scripts npm locaux
+
+| Commande | Effet |
+|----------|--------|
+| `npm run mobile:bump` | Incrémente la version dans `pubspec.yaml` |
+| `npm run apk` | Bump + APK → `takymed.apk` |
+| `npm run aab` | Bump + AAB → `takymed.aab` |
+| `npm run mobile:release` | **Un seul bump** + APK + AAB (versions synchronisées) |
+
+```bash
+# Play Store uniquement
+npm run aab
+
+# APK + AAB même version (recommandé avant publication)
+npm run mobile:release
+```
+
+### Workflow principal : `build-android.yml`
+
+**Déclencheurs** : push sur `master` / `main` si `mobile/**` modifié, ou manuel.
+
+**Artifacts** (même numéro de version affichée) :
+- `takymed-apk-X.Y.Z.zip` → `takymed.apk`
+- `takymed-aab-X.Y.Z.zip` → `takymed.aab` (Google Play Console)
+
+### Workflow AAB seul : `build-aab.yml`
+
+- Manuel : **Actions → Build AAB Release (Play Store) → Run workflow**
+- Équivalent à `npm run aab` (bump + build)
+
+### Workflow APK seul : `build-apk.yml`
+
+- Manuel uniquement (legacy)
+- Équivalent à `npm run apk`
+
+### Google Play Console
+
+1. Télécharger `takymed.aab` depuis les Artifacts GitHub (ou `npm run aab` / `mobile:release` en local)
+2. Play Console → votre app → **Production** (ou test interne)
+3. **Créer une version** → importer l'AAB
+
+> **Signature** : le build release utilise encore la clé debug (`build.gradle.kts`). Pour la production Play Store, configurez un keystore release (variables `ANDROID_KEYSTORE_*` ou `key.properties`).
+
+---
+
+## 5. Ancienne section APK (référence)
 
 ### Récupérer l’APK
 
 1. GitHub → **Actions**
-2. Run **Build APK Release** (verte)
-3. **Artifacts** → `takymed-apk-X.Y.Z+N.zip` → `takymed.apk`
-
-### Version automatique (patch)
-
-Version de départ : **`1.0.0+1`**
-
-Chaque build (`npm run apk` ou CI) incrémente le **patch** :
-
-| Build | Version affichée | Build Android |
-|-------|------------------|---------------|
-| 1 | `1.0.0+1` | 1 |
-| 2 | `1.0.1+2` | 2 |
-| 3 | `1.0.2+3` | 3 |
-| … | `1.0.3+4` | … |
-
-> La version bumpée en CI n’est pas commitée automatiquement. Pour la persister : `npm run apk` en local puis commitez `mobile/pubspec.yaml`.
+2. Run **Build Android Release** (statut vert)
+3. Artifacts → `takymed-apk-X.Y.Z.zip`
 
 ---
 
-## 5. Checklist rapide
-
-```
-□ Secret ENV_FILE = contenu complet du .env
-□ Secret SSH_PRIVATE_KEY (recommandé)
-□ Clé publique SSH sur le serveur
-□ Push sur master → Deploy vert
-□ mobile/ modifié → Build APK + artifact
-```
-
----
-
-## 6. Déclenchement manuel
-
-| Action | Chemin GitHub |
-|--------|---------------|
-| Déployer | Actions → **Deploy (push.sh)** → Run workflow |
-| Builder APK | Actions → **Build APK Release** → Run workflow |
-
----
-
-## 7. Dépannage
-
-### `ENV_FILE manquant`
-→ Ajoutez le secret dans **Settings → Secrets → Actions**
-
-### SSH / Deploy
-- Vérifier `SERVER_IP` et `SERVER_USER` dans `ENV_FILE`
-- Tester : `ssh -i ~/.ssh/takymed-gha root@IP`
-
-### Health check échoue
-- `PORT=3500` dans `ENV_FILE`
-- `curl http://DOMAIN:3500/api/ping`
-- Logs : `pm2 logs takymed`
-
-### Build APK échoue
-- Logs Flutter dans Actions
-- `flutter doctor -v` en local
-
-### Déploiement manuel de secours
+## 6. Pousser le code sur GitHub
 
 ```bash
-./scripts/push.sh   # lit votre .env local
+git add .
+git commit -m "votre message"
+git fetch origin
+git pull origin master    # synchroniser avec le distant
+git push origin master
 ```
+
+En cas de `403 Permission denied` : demander l’accès Write à un admin de `TE-SEA-Incubator`, ou utiliser un PAT / SSH.
+
+---
+
+## 7. Checklist
+
+```
+□ Remote origin → TE-SEA-Incubator/TAKYMED
+□ Actions activées sur le dépôt
+□ .env local rempli (pour push.sh uniquement)
+□ git push origin master
+□ Déploiement : ./scripts/push.sh en local
+□ Android : Actions → Build Android Release → Artifacts (APK + AAB)
+□ Play Store : importer takymed.aab depuis Artifacts
+```
+
+---
+
+## 8. Dépannage
+
+### Push refusé (403)
+→ Droits Write manquants sur le dépôt ou mauvais compte GitHub.
+
+### `./scripts/push.sh` échoue
+→ Vérifier `SERVER_IP`, SSH, et `curl http://DOMAIN:PORT/api/ping` après deploy.
+
+### Build APK échoue
+→ Consulter les logs dans l’onglet Actions ; tester `flutter doctor -v` en local.

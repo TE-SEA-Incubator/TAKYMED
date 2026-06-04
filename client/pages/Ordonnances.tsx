@@ -8,7 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FileText, Calendar, User, Pill, CheckCircle2, Clock, XCircle, Loader2, ChevronDown, ChevronUp, Pencil, Trash2, Bell, Plus, Minus, Save, X, RefreshCw, RotateCcw, Phone, ArrowRight, Crown, Check, Shield, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { PageShell } from "@/components/app/PageShell";
+import { PageHeader } from "@/components/app/PageHeader";
+import { StatCard } from "@/components/app/StatCard";
+import { EmptyState } from "@/components/app/EmptyState";
 import {
   Dialog,
   DialogContent,
@@ -397,69 +402,48 @@ export default function Ordonnances() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 py-8 px-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-3">
-              <FileText className="w-8 h-8 text-primary" />
-              Mes Ordonnances
-            </h1>
-            <p className="text-slate-500 mt-2">Gérez vos ordonnances et suivez les rappels</p>
-          </div>
-          <Button className="rounded-xl" onClick={() => navigate("/prescription")}>
-            <Plus className="w-4 h-4 mr-2" />
+    <PageShell>
+      <PageHeader
+        badge="Gestion des ordonnances"
+        title="Mes ordonnances"
+        subtitle="Consultez, modifiez et suivez vos rappels de prise médicamenteuse."
+        actions={
+          <Button className="h-12 rounded-2xl px-6 font-bold" onClick={() => navigate("/prescription")}>
+            <Plus className="mr-2 h-4 w-4" />
             Nouveau rappel
           </Button>
-        </div>
+        }
+      />
 
-        {/* Stats Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <Card className="border-0 shadow-md">
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                <FileText className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{ordonnances.length}</p>
-                <p className="text-sm text-slate-500">Total</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-md">
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
-                <CheckCircle2 className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{ordonnances.filter(o => o.prises_effectuees >= o.prises_totales && o.est_active && o.prises_totales > 0).length}</p>
-                <p className="text-sm text-slate-500">Terminées</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-md">
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
-                <Clock className="w-6 h-6 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{ordonnances.filter(o => (o.prises_effectuees < o.prises_totales || o.prises_totales === 0) && o.est_active).length}</p>
-                <p className="text-sm text-slate-500">En cours</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <StatCard label="Total" value={ordonnances.length} icon={FileText} tone="primary" />
+        <StatCard
+          label="Terminées"
+          value={ordonnances.filter((o) => o.prises_effectuees >= o.prises_totales && o.est_active && o.prises_totales > 0).length}
+          icon={CheckCircle2}
+          tone="success"
+        />
+        <StatCard
+          label="En cours"
+          value={ordonnances.filter((o) => (o.prises_effectuees < o.prises_totales || o.prises_totales === 0) && o.est_active).length}
+          icon={Clock}
+          tone="warning"
+        />
+      </div>
 
         {/* Ordonnances List */}
         {ordonnances.length === 0 ? (
-          <Card className="border-0 shadow-md">
-            <CardContent className="p-12 text-center">
-              <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-slate-700">Aucune ordonnance</h3>
-              <p className="text-slate-500 mt-2">Vous n'avez pas encore d'ordonnances enregistrées</p>
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={FileText}
+            title="Aucune ordonnance"
+            description="Créez votre premier rappel de prise pour commencer le suivi."
+            action={
+              <Button className="rounded-2xl font-bold" onClick={() => navigate("/prescription")}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nouveau rappel
+              </Button>
+            }
+          />
         ) : (
           <div className="space-y-4">
             {ordonnances.map((ord) => (
@@ -873,7 +857,6 @@ export default function Ordonnances() {
             ))}
           </div>
         )}
-      </div>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
@@ -994,6 +977,6 @@ export default function Ordonnances() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }

@@ -255,13 +255,17 @@ class ApiService {
     );
   }
 
-  Future<Map<String, dynamic>> createOrdonnance(Map<String, dynamic> data) async {
-    final userId = data['userId'];
+  Future<Map<String, dynamic>> createOrdonnance(
+    Map<String, dynamic> data, {
+    int? actorUserId,
+  }) async {
+    final targetUserId = data['userId'];
+    final headerUserId = actorUserId ?? targetUserId;
     final response = await http.post(
       Uri.parse('$baseUrl/prescriptions'),
       headers: {
         'Content-Type': 'application/json',
-        if (userId != null) 'x-user-id': userId.toString(),
+        if (headerUserId != null) 'x-user-id': headerUserId.toString(),
       },
       body: jsonEncode(data),
     );
@@ -308,10 +312,9 @@ class ApiService {
     );
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Échec de la recherche de médicaments');
+      return _decodeJsonMap(response);
     }
+    throw Exception(_apiErrorMessage(response, fallback: 'Échec de la recherche de médicaments'));
   }
 
   Future<Map<String, dynamic>> searchMedicationWithAI(String name) async {
@@ -423,7 +426,12 @@ class ApiService {
     throw Exception(body is Map ? (body['error'] ?? 'Échec de l\'inscription du client') : 'Échec de l\'inscription du client');
   }
 
-  Future<Map<String, dynamic>> validateCommercialClient(int commercialId, String clientPhone, String pin) async {
+  Future<Map<String, dynamic>> validateCommercialClient(
+    int commercialId,
+    String clientPhone,
+    String pin, {
+    int? clientId,
+  }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/commercial/validate-client'),
       headers: {
@@ -434,6 +442,7 @@ class ApiService {
         'commercialId': commercialId,
         'clientPhone': clientPhone,
         'pin': pin,
+        if (clientId != null) 'clientId': clientId,
       }),
     );
 

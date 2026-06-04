@@ -12,6 +12,7 @@ import {
   Shield,
   Search,
   User as UserIcon,
+  Briefcase,
   LogOut,
   Crown,
   FileText,
@@ -130,7 +131,7 @@ export function Layout({ children }: LayoutProps) {
             {
               to: "/commercial",
               label: t("nav.commercial"),
-              icon: UserIcon,
+              icon: Briefcase,
               mobilePriority: 2,
             },
           ]
@@ -281,6 +282,15 @@ export function Layout({ children }: LayoutProps) {
                     <LayoutDashboard className="h-4 w-4" />
                     {t("nav.dashboard")}
                   </DropdownMenuItem>
+                  {user.type === "commercial" && (
+                    <DropdownMenuItem
+                      className="cursor-pointer gap-2"
+                      onClick={() => navigate("/commercial")}
+                    >
+                      <Briefcase className="h-4 w-4" />
+                      {t("nav.commercial")}
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     className="cursor-pointer gap-2 text-destructive focus:text-destructive"

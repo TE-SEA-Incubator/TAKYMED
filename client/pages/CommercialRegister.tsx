@@ -29,6 +29,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/app/PageShell";
+import { PageHeader } from "@/components/app/PageHeader";
+import { StepIndicator } from "@/components/app/StepIndicator";
 import { MedicationEntry, DoseSchedule, FrequencyType } from "@shared/api";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -271,6 +274,10 @@ export default function CommercialRegister() {
             toast.error(availability.errors?.[0] || "Ce client ne peut pas être inscrit.");
             return;
           }
+        } else {
+          const err = await res.json().catch(() => ({}));
+          toast.error(err.error || "Impossible de vérifier la disponibilité du client.");
+          return;
         }
       } catch (error) {
         console.error("Vérification client:", error);
@@ -351,6 +358,7 @@ export default function CommercialRegister() {
         body: JSON.stringify({
           commercialId: user?.id,
           clientPhone: fullPhone,
+          clientId: registeredClientId,
           pin: pinCode
         })
       });
@@ -373,32 +381,32 @@ export default function CommercialRegister() {
     return <div className="p-10 text-center">Accès non autorisé</div>;
   }
 
-  const stepLabels = [
-    { num: 1, label: "Informations Client", icon: <UserPlus className="w-4 h-4" /> },
-    { num: 2, label: "Médicaments", icon: <Pill className="w-4 h-4" /> },
-    { num: 3, label: "Calendrier", icon: <Calendar className="w-4 h-4" /> },
-    { num: 4, label: "Validation PIN", icon: <ShieldCheck className="w-4 h-4" /> },
+  const registrationSteps = [
+    { id: 1, label: "Client" },
+    { id: 2, label: "Médicaments" },
+    { id: 3, label: "Calendrier" },
+    { id: 4, label: "Validation PIN" },
   ];
 
   return (
-    <div className="bg-slate-50 min-h-screen pb-20">
-      <div className="container mx-auto px-4 py-6 md:py-8 max-w-5xl">
-        {/* Progress Header */}
-        <div className="flex items-center gap-2 md:gap-4 mb-8 overflow-x-auto pb-4">
-          {stepLabels.map((s, idx) => (
-            <div key={s.num} className="flex items-center gap-2">
-              {idx > 0 && <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />}
-              <div className={cn(
-                "flex items-center gap-2 px-3 md:px-4 py-2 rounded-2xl whitespace-nowrap transition-all",
-                step >= s.num ? "bg-primary text-white" : "bg-slate-200 text-muted-foreground"
-              )}>
-                <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">{s.num}</div>
-                <span className="font-medium text-sm hidden md:inline">{s.label}</span>
-                {s.icon}
-              </div>
-            </div>
-          ))}
-        </div>
+    <PageShell maxWidth="lg">
+      <PageHeader
+        badge="Inscription client"
+        title="Nouveau client commercial"
+        subtitle="Enregistrez un patient, configurez sa première ordonnance et validez son compte par PIN."
+        actions={
+          <Button
+            variant="outline"
+            className="h-11 rounded-2xl"
+            onClick={() => navigate("/commercial")}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Retour tableau de bord
+          </Button>
+        }
+      />
+
+      <StepIndicator steps={registrationSteps} currentStep={step} />
 
         {/* ========== STEP 1: Client Info ========== */}
         {step === 1 && (
@@ -963,7 +971,6 @@ export default function CommercialRegister() {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </PageShell>
   );
 }

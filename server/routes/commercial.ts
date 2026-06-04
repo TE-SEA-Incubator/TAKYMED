@@ -5,6 +5,7 @@ import {
     assertCommercialActor,
     assertHeaderMatchesCommercial,
     checkClientAvailability,
+    findCommercialClientForValidation,
     findProfileByName,
     normalizeClientName,
     normalizePhone,
@@ -189,10 +190,14 @@ router.post("/add-prescription", async (req, res) => {
 
 // Endpoint for Commercial to validate a client using the PIN the client received
 router.post("/validate-client", async (req, res) => {
-    const { commercialId, clientPhone, pin } = req.body;
+    const { commercialId, clientPhone, clientId, pin } = req.body;
 
-    if (!commercialId || !clientPhone || !pin) {
-        return res.status(400).json({ error: "Commercial ID, téléphone et PIN requis." });
+    if (!commercialId || !pin) {
+        return res.status(400).json({ error: "Commercial ID et PIN requis." });
+    }
+
+    if (!clientPhone && (clientId == null || clientId === "")) {
+        return res.status(400).json({ error: "Téléphone ou ID client requis." });
     }
 
     const numericCommercialId = Number(commercialId);
@@ -201,17 +206,20 @@ router.post("/validate-client", async (req, res) => {
     }
 
     try {
-        const normalizedPhone = normalizePhone(String(clientPhone));
         const normalizedPin = String(pin).trim();
+        const parsedClientId =
+            clientId != null && clientId !== "" ? Number(clientId) : undefined;
 
-        const user = db.prepare(`
-            SELECT id_utilisateur, pin_hash, est_valide 
-            FROM Utilisateurs 
-            WHERE numero_telephone = ? AND id_createur = ?
-        `).get(normalizedPhone, numericCommercialId) as { id_utilisateur: number; pin_hash: string; est_valide: number } | undefined;
+        const user = findCommercialClientForValidation(numericCommercialId, {
+            clientId: Number.isFinite(parsedClientId) ? parsedClientId : undefined,
+            phone: clientPhone ? String(clientPhone) : undefined,
+        });
 
         if (!user) {
-            return res.status(404).json({ error: "Client non trouvé ou non créé par vous." });
+            return res.status(404).json({
+                error:
+                    "Client introuvable. Terminez d'abord l'inscription (étape précédente), puis vérifiez le numéro de téléphone.",
+            });
         }
 
         if (user.est_valide === 1) {

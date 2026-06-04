@@ -1,13 +1,10 @@
-name: Build APK Release
-
-# Conservé pour compatibilité : délègue au build Android unifié (APK + AAB même version).
-# Préférer build-android.yml pour les nouveaux runs.
+name: Build AAB Release (Play Store)
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-apk-only:
+  build-aab:
     runs-on: ubuntu-latest
 
     steps:
@@ -39,26 +36,30 @@ jobs:
           cd mobile
           flutter pub get
 
-      - name: Build release APK
-        run: npm run apk
+      - name: Build release AAB
+        run: npm run aab
 
       - name: Read app version
         id: version
         run: |
           DISPLAY=$(node scripts/read-mobile-version.mjs --display)
           echo "display=$DISPLAY" >> "$GITHUB_OUTPUT"
-          echo "📱 Version APK : v$DISPLAY"
+          echo "📱 Version AAB : v$DISPLAY"
 
-      - name: Upload APK artifact
+      - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: takymed-apk-${{ steps.version.outputs.display }}
-          path: takymed.apk
+          name: takymed-aab-${{ steps.version.outputs.display }}
+          path: takymed.aab
           retention-days: 90
           if-no-files-found: error
 
       - name: Build summary
         run: |
-          echo "### APK TAKYMED" >> "$GITHUB_STEP_SUMMARY"
+          echo "### AAB TAKYMED (Play Store)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Version** : \`v${{ steps.version.outputs.display }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Pour APK **et** AAB synchronisés : workflow *Build Android Release* ou \`npm run mobile:release\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Fichier** : \`takymed.aab\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Play Console** : Production → Créer une version → Importer l'AAB" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "> Pour APK + AAB **même version** : workflow *Build Android Release (APK + AAB)* ou \`npm run mobile:release\`" >> "$GITHUB_STEP_SUMMARY"

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
+import '../utils/phone_utils.dart';
 import '../widgets/animated_fade_slide.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/gradient_header.dart';
@@ -23,6 +24,10 @@ class _CommercialRegisterScreenState extends State<CommercialRegisterScreen> {
   final _clientPhoneController = TextEditingController();
   final _pinController = TextEditingController();
   bool _isLoading = false;
+  int? _registeredClientId;
+
+  String get _clientPhoneE164 =>
+      PhoneUtils.normalizeCameroon(_clientPhoneController.text.trim());
 
   @override
   void dispose() {
@@ -37,7 +42,7 @@ class _CommercialRegisterScreenState extends State<CommercialRegisterScreen> {
     final apiService = Provider.of<ApiService>(context, listen: false);
 
     final clientName = _clientNameController.text.trim();
-    final clientPhone = '+237${_clientPhoneController.text.replaceAll(RegExp(r'\s+'), '')}';
+    final clientPhone = _clientPhoneE164;
 
     if (clientName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nom du client requis')));
@@ -45,6 +50,12 @@ class _CommercialRegisterScreenState extends State<CommercialRegisterScreen> {
     }
     if (_clientPhoneController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Numéro de téléphone requis')));
+      return;
+    }
+    if (!RegExp(r'^\+2376\d{8}$').hasMatch(clientPhone)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Numéro invalide. Utilisez le format 6XXXXXXXX')),
+      );
       return;
     }
 
@@ -65,7 +76,7 @@ class _CommercialRegisterScreenState extends State<CommercialRegisterScreen> {
         throw Exception(message);
       }
 
-      await apiService.registerCommercialClient(
+      final result = await apiService.registerCommercialClient(
         authProvider.user!.id,
         clientName,
         clientPhone,
@@ -84,7 +95,9 @@ class _CommercialRegisterScreenState extends State<CommercialRegisterScreen> {
         },
         DateTime.now().toIso8601String().split('T').first,
       );
+      final clientId = result['clientId'];
       setState(() {
+        _registeredClientId = clientId is int ? clientId : int.tryParse(clientId?.toString() ?? '');
         _step = 4;
         _isLoading = false;
       });
@@ -112,8 +125,9 @@ class _CommercialRegisterScreenState extends State<CommercialRegisterScreen> {
     try {
       await apiService.validateCommercialClient(
         authProvider.user!.id,
-        '+237${_clientPhoneController.text.replaceAll(RegExp(r'\s+'), '')}',
+        _clientPhoneE164,
         _pinController.text.trim(),
+        clientId: _registeredClientId,
       );
       setState(() => _isLoading = false);
       if (mounted) {

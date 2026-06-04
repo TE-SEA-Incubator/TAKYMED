@@ -1,5 +1,5 @@
 import { RequestHandler } from "express";
-import { db } from "../db";
+import { getUserAccountContext } from "../services/prescriptionAccessService";
 
 /**
  * Middleware to verify if the user has one of the allowed roles.
@@ -14,18 +14,18 @@ export const verifyRole = (allowedTypes: string[]): RequestHandler => {
     }
 
     try {
-      const user = db.prepare(`
-        SELECT tc.nom_type 
-        FROM Utilisateurs u 
-        JOIN TypesComptes tc ON u.id_type_compte = tc.id_type_compte 
-        WHERE u.id_utilisateur = ?
-      `).get(userId) as { nom_type: string } | undefined;
+      const numericUserId = Number(userId);
+      if (!Number.isFinite(numericUserId) || numericUserId <= 0) {
+        return res.status(401).json({ error: "Identifiant utilisateur invalide" });
+      }
+
+      const user = getUserAccountContext(numericUserId);
 
       if (!user) {
         return res.status(401).json({ error: "Utilisateur non trouvé" });
       }
 
-      const userRole = user.nom_type.toLowerCase().replace(/_old$/, "");
+      const userRole = user.typeName;
       const normalizedAllowed = allowedTypes.map((t) => t.toLowerCase().replace(/_old$/, ""));
 
       if (!normalizedAllowed.includes(userRole)) {
