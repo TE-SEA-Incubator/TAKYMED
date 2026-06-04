@@ -19,13 +19,20 @@
     "start": "node dist/server/node-build.mjs",
     "test": "vitest --run",
     "format.fix": "prettier --write .",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "flutter": "cd mobile && flutter run",
+    "flutter:pub": "cd mobile && flutter pub get",
+    "flutter:build": "cd mobile && flutter build apk",
+    "scrape:pharmacies": "tsx scripts/scrape_pharmacies_garde.ts",
+    "generate:vapid": "node --import tsx -e \"import webpush from 'web-push'; const k=webpush.generateVAPIDKeys(); console.log('WEB_PUSH_PUBLIC_KEY='+k.publicKey); console.log('WEB_PUSH_PRIVATE_KEY='+k.privateKey);\"",
+    "apk": "node scripts/bump-mobile-version.mjs && cd mobile && flutter build apk --release && cp build/app/outputs/flutter-apk/app-release.apk ../takymed.apk && echo '✅ APK copié : takymed.apk'"
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.8",
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "bcrypt": "^5.1.1",
     "better-sqlite3": "^12.6.2",
+    "cheerio": "^1.2.0",
     "cors": "^2.8.5",
     "country-list-with-dial-code-and-flag": "^5.1.1",
     "dompurify": "^3.2.4",
@@ -36,9 +43,11 @@
     "indent-string": "^5.0.0",
     "jspdf": "^4.2.0",
     "jspdf-autotable": "^5.0.7",
+    "node-cron": "^4.2.1",
     "papaparse": "^5.5.3",
     "pino": "^10.3.1",
     "qrcode-terminal": "^0.12.0",
+    "web-push": "^3.6.7",
     "zod": "^3.25.76"
   },
   "devDependencies": {

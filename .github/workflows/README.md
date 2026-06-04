@@ -1,103 +1,172 @@
-# GitHub Actions Deployment Setup
+# GitHub Actions — TAKYMED
 
-This directory contains the automated deployment workflow for TAKYMED.
+Deux workflows séparés pour le dépôt [TE-SEA-Incubator/TAKYMED](https://github.com/TE-SEA-Incubator/TAKYMED.git) :
 
-## Workflow Overview
+| Workflow | Fichier | Rôle |
+|----------|---------|------|
+| **Deploy (push.sh)** | `deploy.yml` | Déploie le serveur web/API via `scripts/push.sh` |
+| **Build APK Release** | `build-apk.yml` | Build l’APK Android (`npm run apk`) et la met en artifact |
 
-The `.github/workflows/deploy.yml` workflow automatically deploys your application to production when:
-- Code is pushed to `master` or `main` branch
-- Manual trigger from GitHub Actions tab
+---
 
-## Required GitHub Secrets
+## 1. Configuration GitHub (obligatoire)
 
-You must configure these secrets in your GitHub repository:
+Dans le dépôt GitHub : **Settings → Secrets and variables → Actions → Secrets**
 
-1. **SSH_PRIVATE_KEY**
-   - Generate a new SSH key pair: `ssh-keygen -t rsa -b 4096 -C "github-actions"`
-   - Add the public key to your server: `ssh-copy-id -i ~/.ssh/id_rsa.pub root@82.165.150.150`
-   - Add the private key content to GitHub Secrets
+### Secret principal : `ENV_FILE`
 
-2. **SERVER_HOST**
-   - Value: `82.165.150.150`
+**Un seul secret** contient **tout** le contenu de votre fichier `.env` (ligne par ligne).
 
-3. **SERVER_USER**
-   - Value: `root`
+1. Ouvrez votre `.env` local (ou copiez depuis `.env.example`)
+2. Remplissez toutes les valeurs (serveur, clés API, etc.)
+3. Copiez **l’intégralité** du fichier
+4. GitHub → **New repository secret** → nom : `ENV_FILE` → collez le contenu
 
-4. **APP_URL**
-   - Value: `http://dev.takymed.com:3500`
+Exemple minimal :
 
-## Setup Instructions
-
-### 1. Generate SSH Keys
-```bash
-# Generate new key pair
-ssh-keygen -t rsa -b 4096 -C "github-actions" -f ~/.ssh/github-actions
-
-# Copy public key to server
-ssh-copy-id -i ~/.ssh/github-actions.pub root@82.165.150.150
+```env
+SERVER_IP=82.165.150.150
+SERVER_USER=root
+SERVER_PASS=votre_mot_de_passe_ssh
+DEST_DIR=/home/TAKYMED
+PORT=3500
+DOMAIN=dev.takymed.com
+PING_MESSAGE="TAKYMED API is running"
+DB_PATH=./bd.sqlite
+NODE_ENV=production
+GEMINI_API_KEY=votre_cle_gemini
 ```
 
-### 2. Add Secrets to GitHub
-1. Go to your GitHub repository
-2. Navigate to Settings → Secrets and variables → Actions
-3. Click "New repository secret"
-4. Add each secret listed above
+> **Important :** utilisez un **Secret** (pas une Variable). Les Variables GitHub sont visibles en clair dans l’interface ; le `.env` contient des mots de passe et clés API.
 
-### 3. Test the Workflow
+Le workflow écrit ce contenu dans `.env` avant le déploiement, puis `push.sh` le copie sur le serveur.
+
+### Secret SSH (recommandé en plus de ENV_FILE)
+
+| Nom | Obligatoire | Description |
+|-----|-------------|-------------|
+| `SSH_PRIVATE_KEY` | Recommandé | Clé privée SSH (`-----BEGIN ... KEY-----`) |
+
+Authentification SSH :
+- **Recommandé :** `SSH_PRIVATE_KEY` + `SERVER_IP` / `SERVER_USER` dans `ENV_FILE`
+- **Alternative :** `SERVER_PASS` dans `ENV_FILE` (sans clé SSH)
+
+---
+
+## 2. Préparer le serveur (une seule fois)
+
+### Générer une clé SSH pour GitHub Actions
+
 ```bash
-# Make a small change and commit
-git add .
-git commit -m "Test GitHub Actions deployment"
-git push origin master
+ssh-keygen -t ed25519 -C "github-actions-takymed" -f ~/.ssh/takymed-gha -N ""
+ssh-copy-id -i ~/.ssh/takymed-gha.pub root@82.165.150.150
+cat ~/.ssh/takymed-gha   # → secret SSH_PRIVATE_KEY
 ```
 
-## Workflow Process
+Le serveur doit avoir Node.js 20+ et PM2. Le `.env` est **déployé automatiquement** à chaque run via le secret `ENV_FILE`.
 
-1. **Checkout** - Gets the latest code
-2. **Setup Node.js** - Uses Node.js 18 with npm cache
-3. **Build** - Installs dependencies and builds the application
-4. **Setup SSH** - Configures SSH connection to server
-5. **Deploy** - Syncs files using rsync (excludes sensitive files)
-6. **Install** - Installs production dependencies on server
-7. **Build** - Builds application on server
-8. **Restart** - Restarts application with PM2
-9. **Health Check** - Verifies application is responding
+---
 
-## Protected Files
+## 3. Workflow Deploy (`deploy.yml`)
 
-The following files are never overwritten during deployment:
-- `.env` - Environment variables
-- `bd.sqlite*` - Database files
-- `uploads/` - User uploads
-- `node_modules/` - Dependencies
-- `.git/` - Git metadata
+**Déclencheurs :**
+- Push sur `main` ou `master`
+- Lancement manuel : **Actions → Deploy (push.sh) → Run workflow**
 
-## Troubleshooting
+**Ce qu’il fait :**
+1. Reconstruit `.env` depuis le secret `ENV_FILE`
+2. Connexion SSH au serveur
+3. `scripts/push.sh` : rsync code, copie `.env`, build distant, PM2, health check
 
-### SSH Connection Issues
-- Verify the public key is correctly added to `~/.ssh/authorized_keys` on server
-- Check that the server allows SSH key authentication
-- Ensure the SSH private key in GitHub Secrets is complete (including `-----BEGIN/END RSA PRIVATE KEY-----`)
+**Clés lues depuis `ENV_FILE` :**
 
-### Build Failures
-- Check the build logs in GitHub Actions
-- Ensure all dependencies are in `package.json`
-- Verify Node.js version compatibility
+| Clé `.env` | Usage |
+|------------|--------|
+| `SERVER_IP` | IP / hostname SSH |
+| `SERVER_USER` | Utilisateur SSH |
+| `SERVER_PASS` | Mot de passe SSH (si pas de clé) |
+| `DEST_DIR` | Dossier distant (`/home/TAKYMED`) |
+| `PORT` | Port API Node |
+| `DOMAIN` | Domaine (logs + health check) |
+| `GEMINI_API_KEY`, etc. | Config application sur le serveur |
 
-### Health Check Failures
-- Check if the application is running on the correct port
-- Verify firewall settings allow access to the port
-- Check PM2 logs: `pm2 logs takymed`
+---
 
-### Manual Deployment
-If GitHub Actions fail, you can still deploy manually:
-```bash
-./scripts/push.sh
+## 4. Workflow Build APK (`build-apk.yml`)
+
+**Déclencheurs :**
+- Push sur `main` / `master` si fichiers `mobile/**` modifiés
+- Lancement manuel : **Actions → Build APK Release → Run workflow**
+
+**Ce qu’il fait :**
+1. Installe Node.js, Java 17, Flutter stable
+2. Lance `npm run apk` (incrémente la version + build release)
+3. Publie `takymed.apk` en **artifact** téléchargeable
+
+### Récupérer l’APK
+
+1. GitHub → **Actions**
+2. Run **Build APK Release** (verte)
+3. **Artifacts** → `takymed-apk-X.Y.Z+N.zip` → `takymed.apk`
+
+### Version automatique (patch)
+
+Version de départ : **`1.0.0+1`**
+
+Chaque build (`npm run apk` ou CI) incrémente le **patch** :
+
+| Build | Version affichée | Build Android |
+|-------|------------------|---------------|
+| 1 | `1.0.0+1` | 1 |
+| 2 | `1.0.1+2` | 2 |
+| 3 | `1.0.2+3` | 3 |
+| … | `1.0.3+4` | … |
+
+> La version bumpée en CI n’est pas commitée automatiquement. Pour la persister : `npm run apk` en local puis commitez `mobile/pubspec.yaml`.
+
+---
+
+## 5. Checklist rapide
+
+```
+□ Secret ENV_FILE = contenu complet du .env
+□ Secret SSH_PRIVATE_KEY (recommandé)
+□ Clé publique SSH sur le serveur
+□ Push sur master → Deploy vert
+□ mobile/ modifié → Build APK + artifact
 ```
 
-## Security Notes
+---
 
-- SSH keys are stored encrypted in GitHub Secrets
-- Sensitive files are excluded from deployment
-- The workflow runs with minimal permissions
-- Consider using a non-root user for better security
+## 6. Déclenchement manuel
+
+| Action | Chemin GitHub |
+|--------|---------------|
+| Déployer | Actions → **Deploy (push.sh)** → Run workflow |
+| Builder APK | Actions → **Build APK Release** → Run workflow |
+
+---
+
+## 7. Dépannage
+
+### `ENV_FILE manquant`
+→ Ajoutez le secret dans **Settings → Secrets → Actions**
+
+### SSH / Deploy
+- Vérifier `SERVER_IP` et `SERVER_USER` dans `ENV_FILE`
+- Tester : `ssh -i ~/.ssh/takymed-gha root@IP`
+
+### Health check échoue
+- `PORT=3500` dans `ENV_FILE`
+- `curl http://DOMAIN:3500/api/ping`
+- Logs : `pm2 logs takymed`
+
+### Build APK échoue
+- Logs Flutter dans Actions
+- `flutter doctor -v` en local
+
+### Déploiement manuel de secours
+
+```bash
+./scripts/push.sh   # lit votre .env local
+```

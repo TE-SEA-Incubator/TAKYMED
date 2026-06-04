@@ -140,6 +140,17 @@ export function initializeDatabase() {
             db.exec("ALTER TABLE Utilisateurs ADD COLUMN est_valide BOOLEAN DEFAULT TRUE");
         }
 
+        const hasCreeLe = userColumns.some(c => c.name === 'cree_le');
+        const hasMisAJourLe = userColumns.some(c => c.name === 'mis_a_jour_le');
+        if (!hasCreeLe) {
+            console.log("Adding cree_le column to Utilisateurs...");
+            db.exec("ALTER TABLE Utilisateurs ADD COLUMN cree_le DATETIME DEFAULT CURRENT_TIMESTAMP");
+        }
+        if (!hasMisAJourLe) {
+            console.log("Adding mis_a_jour_le column to Utilisateurs...");
+            db.exec("ALTER TABLE Utilisateurs ADD COLUMN mis_a_jour_le DATETIME DEFAULT CURRENT_TIMESTAMP");
+        }
+
         const catAgeCount = db.prepare("SELECT COUNT(*) as count FROM CategoriesAge").get() as { count: number };
         if (catAgeCount.count === 0) {
             console.log("Adding default age categories...");
@@ -422,7 +433,44 @@ export function initializeDatabase() {
             db.exec("PRAGMA foreign_keys = ON");
         }
 
-        // Migration: Ensure NotificationLogs has ON DELETE CASCADE
+        // PharmaciesGarde table (pharmacies de garde scrapées)
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS PharmaciesGarde (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nom TEXT NOT NULL,
+                adresse TEXT,
+                telephone TEXT,
+                statut TEXT DEFAULT 'ouverte',
+                region TEXT NOT NULL,
+                ville TEXT,
+                latitude REAL,
+                longitude REAL,
+                source_url TEXT,
+                mis_a_jour_le DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(nom, telephone, region)
+            )
+        `);
+
+        // Migrate old PharmaciesGarde schema if missing columns
+        try {
+            const gardeCols = db.prepare("PRAGMA table_info(PharmaciesGarde)").all() as { name: string }[];
+            if (gardeCols.length > 0) {
+                if (!gardeCols.some(c => c.name === 'ville')) {
+                    db.exec("ALTER TABLE PharmaciesGarde ADD COLUMN ville TEXT");
+                }
+                if (!gardeCols.some(c => c.name === 'latitude')) {
+                    db.exec("ALTER TABLE PharmaciesGarde ADD COLUMN latitude REAL");
+                }
+                if (!gardeCols.some(c => c.name === 'longitude')) {
+                    db.exec("ALTER TABLE PharmaciesGarde ADD COLUMN longitude REAL");
+                }
+                if (!gardeCols.some(c => c.name === 'source_url')) {
+                    db.exec("ALTER TABLE PharmaciesGarde ADD COLUMN source_url TEXT");
+                }
+            }
+        } catch {
+            // table may not exist yet on first run
+        }
         const nlSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='NotificationLogs'").get() as { sql?: string } | undefined;
         if (nlSchema?.sql && !nlSchema.sql.includes("ON DELETE CASCADE")) {
             console.log("Migrating NotificationLogs to add ON DELETE CASCADE...");
@@ -449,6 +497,61 @@ export function initializeDatabase() {
                 COMMIT;
             `);
             db.exec("PRAGMA foreign_keys = ON");
+        }
+
+        // Notifications in-app feed
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS Notifications (
+                id_notification INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_utilisateur INTEGER NOT NULL,
+                titre TEXT NOT NULL,
+                contenu TEXT,
+                type_notif TEXT DEFAULT 'general',
+                payload TEXT,
+                est_lu INTEGER DEFAULT 0,
+                est_pousse INTEGER DEFAULT 0,
+                cree_le DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (id_utilisateur) REFERENCES Utilisateurs(id_utilisateur) ON DELETE CASCADE
+            )
+        `);
+
+        // Device tokens for push (web, android, ios)
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS DeviceTokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_utilisateur INTEGER NOT NULL,
+                platform TEXT NOT NULL,
+                token TEXT NOT NULL,
+                device_label TEXT,
+                est_active INTEGER DEFAULT 1,
+                cree_le DATETIME DEFAULT CURRENT_TIMESTAMP,
+                mis_a_jour_le DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(id_utilisateur, platform, token),
+                FOREIGN KEY (id_utilisateur) REFERENCES Utilisateurs(id_utilisateur) ON DELETE CASCADE
+            )
+        `);
+
+        db.prepare(`
+            INSERT OR IGNORE INTO CanauxNotification (id_canal, nom_canal) VALUES (1, 'SMS')
+        `).run();
+        db.prepare(`
+            INSERT OR IGNORE INTO CanauxNotification (id_canal, nom_canal) VALUES (2, 'WhatsApp')
+        `).run();
+        db.prepare(`
+            INSERT OR IGNORE INTO CanauxNotification (id_canal, nom_canal) VALUES (3, 'Appel')
+        `).run();
+        db.prepare(`
+            INSERT OR IGNORE INTO CanauxNotification (id_canal, nom_canal) VALUES (4, 'Push')
+        `).run();
+
+        // Unique constraint on notification preferences
+        try {
+            db.exec(`
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_prefs_user_channel_contact
+                ON PreferencesNotificationUtilisateurs(id_utilisateur, id_canal, valeur_contact)
+            `);
+        } catch {
+            // index may already exist
         }
     } catch (error) {
         console.error("Failed to initialize database:", error);

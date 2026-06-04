@@ -13,7 +13,9 @@ import { adminRouter } from "./routes/admin";
 import { paymentRouter } from "./routes/payments";
 import { ordonnanceRouter } from "./routes/ordonnances";
 import { commercialRouter } from "./routes/commercial";
-import { notificationRouter } from "./services/notificationProvider";
+import { pharmaciesGardeRouter } from "./routes/pharmaciesGarde";
+import { notificationRouter } from "./routes/notifications";
+import { startPharmacyScheduler } from "./services/pharmacyScheduler";
 import { startReminderWorker } from "./services/reminderWorker";
 import { connectToWhatsApp } from "./services/whatsappProvider";
 import { db, initializeDatabase } from "./db";
@@ -66,11 +68,18 @@ export function createServer() {
   app.use("/api/payments", paymentRouter);
   app.use("/api/ordonnances", ordonnanceRouter);
   app.use("/api/notifications", notificationRouter);
+  app.use("/api/pharmacies-garde", pharmaciesGardeRouter);
   app.use("/api/commercial", commercialRouter);
+
+  // Toujours renvoyer du JSON pour les routes API inconnues (évite HTML/DOCTYPE côté clients)
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ error: "Endpoint API introuvable" });
+  });
 
   // Start services
   connectToWhatsApp().catch(err => console.error("WhatsApp Init Error:", err));
   startReminderWorker();
+  startPharmacyScheduler();
 
   return app;
 }

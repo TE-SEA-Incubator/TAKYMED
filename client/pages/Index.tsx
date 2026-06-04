@@ -33,7 +33,7 @@ export default function Index() {
               {t('index.badge')}
             </div>
           </div>
-          <Logo size="medium" className="mx-auto -mt-2 mb-2 md:-mt-4 md:mb-4" />
+          <Logo size="large" badge className="mx-auto mb-4 md:mb-6" />
           <h1 className="text-5xl md:text-7xl font-black text-slate-900 tracking-tight leading-[1.1]">
             {t('index.heroTitle1')}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">

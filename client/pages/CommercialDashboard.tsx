@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import Logo from "@/components/Logo1";
 
 interface Client {
   id: number;
@@ -31,10 +32,21 @@ interface Client {
   reminderCount: number;
 }
 
+interface CommercialSummary {
+  totalClients: number;
+  validClients: number;
+  pendingClients: number;
+  totalPrescriptions: number;
+  totalReminders: number;
+  activeReminders?: number;
+  overdueReminders?: number;
+}
+
 export default function CommercialDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
+  const [summary, setSummary] = useState<CommercialSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -45,22 +57,30 @@ export default function CommercialDashboard() {
   const fetchClients = async () => {
     if (!user?.id) return;
     try {
-      const res = await fetch(`/api/commercial/clients?commercialId=${user.id}`, {
-        headers: { "x-user-id": user.id.toString() }
-      });
-      if (!res.ok) throw new Error("Erreur chargement clients");
-      const data = await res.json();
-      setClients(data.clients);
-    } catch (error) {
+      const headers = { "x-user-id": user.id.toString() };
+      const [clientsRes, statsRes] = await Promise.all([
+        fetch(`/api/commercial/clients?commercialId=${user.id}`, { headers }),
+        fetch(`/api/commercial/stats?commercialId=${user.id}`, { headers }),
+      ]);
+      if (!clientsRes.ok) {
+        const err = await clientsRes.json().catch(() => ({}));
+        throw new Error(err.error || `Erreur chargement clients (${clientsRes.status})`);
+      }
+      const data = await clientsRes.json();
+      setClients(Array.isArray(data.clients) ? data.clients : []);
+      if (statsRes.ok) {
+        setSummary(await statsRes.json());
+      }
+    } catch (error: any) {
       console.error(error);
-      toast.error("Impossible de charger la liste des clients");
+      toast.error(error?.message || "Impossible de charger la liste des clients");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleRenameClient = async (id: number, currentName: string) => {
-    const newName = prompt("Nouveau nom pour ce client :", currentName);
+    const newName = prompt("Nouveau nom pour ce client :", currentName)?.trim();
     if (!newName || newName === currentName || !user?.id) return;
 
     try {
@@ -72,11 +92,14 @@ export default function CommercialDashboard() {
         },
         body: JSON.stringify({ commercialId: user.id, name: newName })
       });
-      if (!res.ok) throw new Error("Erreur de modification");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Erreur de modification");
+      }
       toast.success("Client renommé avec succès");
       fetchClients();
-    } catch (error) {
-      toast.error("Échec de la modification");
+    } catch (error: any) {
+      toast.error(error.message || "Échec de la modification");
     }
   };
   
@@ -107,9 +130,12 @@ export default function CommercialDashboard() {
         {/* Header Section */}
         <div className="bg-white p-8 rounded-[2.5rem] border shadow-xl mb-8 flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[80px] -mr-32 -mt-32" />
-          <div className="relative z-10">
-            <h1 className="text-3xl font-black tracking-tighter">Tableau de bord <span className="text-primary font-bold">Commercial</span></h1>
-            <p className="text-muted-foreground font-medium">Gestion et validation de vos clients</p>
+          <div className="relative z-10 flex items-center gap-5 w-full md:w-auto">
+            <Logo size="small" badge />
+            <div>
+              <h1 className="text-3xl font-black tracking-tighter">Tableau de bord <span className="text-primary font-bold">Commercial</span></h1>
+              <p className="text-muted-foreground font-medium">Gestion et validation de vos clients</p>
+            </div>
           </div>
           <div className="flex gap-4 relative z-10 w-full md:w-auto">
             <Button onClick={() => navigate('/commercial/register')} className="flex-1 md:flex-none rounded-2xl h-12 px-6 font-bold shadow-lg shadow-primary/20">
@@ -249,19 +275,31 @@ export default function CommercialDashboard() {
                <div className="grid grid-cols-1 gap-6">
                   <div className="flex items-center justify-between">
                     <p className="text-slate-400 text-sm font-medium">Clients total</p>
-                    <p className="text-xl font-black">{clients.length}</p>
+                    <p className="text-xl font-black">{summary?.totalClients ?? clients.length}</p>
                   </div>
                   <div className="border-t border-white/5 pt-4 flex items-center justify-between">
                     <p className="text-slate-400 text-sm font-medium">Clients validés</p>
-                    <p className="text-xl font-black text-green-400">{clients.filter(c => c.isValid).length}</p>
+                    <p className="text-xl font-black text-green-400">{summary?.validClients ?? clients.filter(c => c.isValid).length}</p>
                   </div>
                   <div className="border-t border-white/5 pt-4 flex items-center justify-between">
                     <p className="text-slate-400 text-sm font-medium">En attente de PIN</p>
-                    <p className="text-xl font-black text-orange-400">{clients.filter(c => !c.isValid).length}</p>
+                    <p className="text-xl font-black text-orange-400">{summary?.pendingClients ?? clients.filter(c => !c.isValid).length}</p>
                   </div>
                   <div className="border-t border-white/5 pt-4 flex items-center justify-between">
                     <p className="text-slate-400 text-sm font-medium">Ordonnances créées</p>
-                    <p className="text-xl font-black text-blue-400">{clients.reduce((acc, c) => acc + (c.prescriptionCount || 0), 0)}</p>
+                    <p className="text-xl font-black text-blue-400">{summary?.totalPrescriptions ?? clients.reduce((acc, c) => acc + (c.prescriptionCount || 0), 0)}</p>
+                  </div>
+                  <div className="border-t border-white/5 pt-4 flex items-center justify-between">
+                    <p className="text-slate-400 text-sm font-medium">Rappels planifiés</p>
+                    <p className="text-xl font-black text-purple-400">{summary?.totalReminders ?? clients.reduce((acc, c) => acc + (c.reminderCount || 0), 0)}</p>
+                  </div>
+                  <div className="border-t border-white/5 pt-4 flex items-center justify-between">
+                    <p className="text-slate-400 text-sm font-medium">Rappels actifs</p>
+                    <p className="text-xl font-black text-amber-400">{summary?.activeReminders ?? summary?.totalReminders ?? 0}</p>
+                  </div>
+                  <div className="border-t border-white/5 pt-4 flex items-center justify-between">
+                    <p className="text-slate-400 text-sm font-medium">En retard</p>
+                    <p className="text-xl font-black text-red-400">{summary?.overdueReminders ?? 0}</p>
                   </div>
                </div>
             </div>

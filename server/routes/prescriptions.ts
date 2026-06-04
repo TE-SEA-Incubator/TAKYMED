@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { db } from "../db";
+import { buildUserDashboardStats } from "../services/dashboardStats";
 import {
     countActiveOrdonnances,
     countPendingRappels,
@@ -7,6 +8,7 @@ import {
     isUnlimited,
     refreshOrdonnanceActiveState,
 } from "../services/accountLimits";
+import { saveUserNotificationPreferences } from "../services/notificationPreferencesService";
 
 const router = Router();
 
@@ -69,7 +71,7 @@ router.get("/", (req, res) => {
       JOIN ElementsOrdonnance eo ON cp.id_element_ordonnance = eo.id_element_ordonnance
       JOIN Medicaments m ON eo.id_medicament = m.id_medicament
       JOIN Ordonnances o ON eo.id_ordonnance = o.id_ordonnance
-      WHERE o.id_utilisateur = ? AND o.est_active = 1
+      WHERE o.id_utilisateur = ? AND (o.est_active = 1 OR cp.statut_prise = 0)
       `;
         const params: any[] = [userId];
 
@@ -78,7 +80,7 @@ router.get("/", (req, res) => {
             params.push(patientId);
         }
 
-        query += ` ORDER BY cp.heure_prevue ASC LIMIT 100`;
+        query += ` ORDER BY cp.heure_prevue ASC`;
 
         const doses = db.prepare(query).all(...params);
 
@@ -113,49 +115,12 @@ router.get("/", (req, res) => {
            ORDER BY o.date_ordonnance DESC
         `).all(userId);
 
-        const pharmacyCount = db.prepare("SELECT COUNT(*) as count FROM Pharmacies").get() as { count: number };
-
-        const limits = getUserAccountLimits(numericUserId);
-        const activeOrdonnances = countActiveOrdonnances(numericUserId);
-        const activeRappels = countPendingRappels(numericUserId);
-
-        const ordonnanceUnlimited = isUnlimited(limits?.maxOrdonnances);
-        const rappelsUnlimited = isUnlimited(limits?.maxRappels);
-
-        const ordonnanceRemaining = ordonnanceUnlimited
-            ? null
-            : Math.max(Number(limits?.maxOrdonnances || 0) - activeOrdonnances, 0);
-
-        const rappelsRemaining = rappelsUnlimited
-            ? null
-            : Math.max(Number(limits?.maxRappels || 0) - activeRappels, 0);
+        const stats = buildUserDashboardStats(numericUserId, patientId ? Number(patientId) : undefined);
 
         res.json({
             doses: mappedDoses,
             patients: patientsDb,
-            stats: {
-                observanceRate: mappedDoses.length > 0
-                    ? Math.round((mappedDoses.filter(d => d.statusTaken).length / mappedDoses.length) * 100)
-                    : 100,
-                activeReminders: activeRappels,
-                plannedReminders: mappedDoses.length,
-                nearbyPharmacies: pharmacyCount.count,
-                nextDose: mappedDoses.find(d => !d.statusTaken) || null,
-                quota: {
-                    ordonnances: {
-                        max: limits?.maxOrdonnances ?? null,
-                        used: activeOrdonnances,
-                        remaining: ordonnanceRemaining,
-                        unlimited: ordonnanceUnlimited,
-                    },
-                    rappels: {
-                        max: limits?.maxRappels ?? null,
-                        used: activeRappels,
-                        remaining: rappelsRemaining,
-                        unlimited: rappelsUnlimited,
-                    },
-                },
-            }
+            stats,
         });
     } catch (error) {
         console.error("Failed to list prescriptions:", error);
@@ -220,39 +185,7 @@ router.post("/", (req, res) => {
 
             // 2. Save Notification Preferences (multi contacts + multi channels)
             if (notifConfig) {
-                const channelMap: Record<string, number> = {
-                    sms: 1,
-                    whatsapp: 2,
-                    call: 3,
-                    push: 4,
-                };
-
-                const recipients = Array.isArray(notifConfig.recipients)
-                    ? notifConfig.recipients.map((r: string) => (r || '').trim()).filter(Boolean)
-                    : (notifConfig.phone ? [String(notifConfig.phone).trim()] : []);
-
-                const channels = Array.isArray(notifConfig.channels)
-                    ? notifConfig.channels.filter((c: string) => channelMap[c])
-                    : (notifConfig.type ? [notifConfig.type] : []);
-
-                if (recipients.length > 0 && channels.length > 0) {
-                    db.prepare(`
-                        UPDATE PreferencesNotificationUtilisateurs
-                        SET est_active = 0
-                        WHERE id_utilisateur = ?
-                    `).run(userId);
-
-                    const insertPref = db.prepare(`
-                        INSERT INTO PreferencesNotificationUtilisateurs (id_utilisateur, id_canal, valeur_contact, est_active)
-                        VALUES (?, ?, ?, 1)
-                    `);
-
-                    for (const recipient of recipients) {
-                        for (const channel of channels) {
-                            insertPref.run(userId, channelMap[channel], recipient);
-                        }
-                    }
-                }
+                saveUserNotificationPreferences(Number(userId), notifConfig);
             }
 
             // 3. Iterate each Medication

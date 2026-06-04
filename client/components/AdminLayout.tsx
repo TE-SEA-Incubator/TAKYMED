@@ -185,8 +185,12 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           isSidebarCollapsed ? "w-20" : "w-64",
         )}
       >
-        <div className="flex h-20 items-center justify-center border-b border-[#e2e8f0] px-4">
-          {isSidebarCollapsed ? <Logo size="small" /> : <Logo size="medium" />}
+        <div className="flex h-24 items-center justify-center border-b border-[#e2e8f0] px-4 py-3">
+          {isSidebarCollapsed ? (
+            <Logo size="small" badge />
+          ) : (
+            <Logo size="medium" badge className="mx-auto" />
+          )}
         </div>
 
         <div className="flex-1 space-y-6 overflow-y-auto px-3 py-6">

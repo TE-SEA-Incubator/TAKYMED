@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { db } from "../db";
+import { geminiGenerateText, getGeminiApiKey, parseJsonFromAiText } from "../utils/gemini";
 
 const router = Router();
 
@@ -127,6 +128,47 @@ router.post("/interactions", (req, res) => {
     } catch (error) {
         console.error("Failed to add interaction:", error);
         res.status(500).json({ error: "Server error adding interaction" });
+    }
+});
+
+// AI-powered medication info (Gemini fallback when not in DB)
+router.get("/ai-info", async (req, res) => {
+    const name = req.query.name as string;
+    if (!name || name.trim().length < 2) {
+        return res.status(400).json({ error: "Nom du médicament requis" });
+    }
+
+    if (!getGeminiApiKey()) {
+        return res.status(503).json({ error: "Clé API Gemini non configurée sur le serveur" });
+    }
+
+    try {
+        const prompt = `Tu es un assistant médical. Donne des informations sur le médicament "${name.trim()}" en JSON uniquement.
+Format exact:
+{"name":"${name.trim()}","description":"description générale en français (2-3 phrases)","dosage":"posologie habituelle adulte","precautions":"principales précautions d'emploi","sideEffects":"effets indésirables courants","category":"catégorie (antibiotique, analgésique, etc.)"}
+Si le médicament est inconnu, retourne uniquement: {"error":"Médicament inconnu"}`;
+
+        const { text, error } = await geminiGenerateText(prompt, { json: true, maxOutputTokens: 768 });
+
+        if (!text) {
+            return res.status(502).json({ error: error ?? "Erreur API Gemini" });
+        }
+
+        try {
+            const parsed = parseJsonFromAiText(text) as { error?: string };
+
+            if (parsed.error) {
+                return res.status(404).json({ error: parsed.error });
+            }
+
+            res.json({ aiResult: parsed, fromAI: true });
+        } catch (e) {
+            console.error("Failed to parse AI response:", text);
+            return res.status(502).json({ error: "Format de réponse IA invalide" });
+        }
+    } catch (error) {
+        console.error("AI medication lookup failed:", error);
+        res.status(500).json({ error: "Recherche IA indisponible" });
     }
 });
 

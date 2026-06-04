@@ -25,8 +25,8 @@ export const verifyRole = (allowedTypes: string[]): RequestHandler => {
         return res.status(401).json({ error: "Utilisateur non trouvé" });
       }
 
-      const userRole = user.nom_type.toLowerCase();
-      const normalizedAllowed = allowedTypes.map(t => t.toLowerCase());
+      const userRole = user.nom_type.toLowerCase().replace(/_old$/, "");
+      const normalizedAllowed = allowedTypes.map((t) => t.toLowerCase().replace(/_old$/, ""));
 
       if (!normalizedAllowed.includes(userRole)) {
         console.warn(`[Security] Access denied for user ${userId} (Role: ${userRole}) to ${req.originalUrl}`);

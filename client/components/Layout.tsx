@@ -183,8 +183,8 @@ export function Layout({ children }: LayoutProps) {
             to="/"
             className="group flex h-full items-center gap-3 md:gap-4 active:scale-95 transition-transform shrink-0"
           >
-            <div className="relative flex h-full items-center justify-center py-1 transition-all duration-700 hover:rotate-2">
-              <Logo size="small" className="h-8 md:h-10" />
+            <div className="relative flex h-full items-center justify-center py-1 transition-all duration-700 hover:rotate-1">
+              <Logo size="nav" badge />
             </div>
           </Link>
 
@@ -326,6 +326,9 @@ export function Layout({ children }: LayoutProps) {
                   className="w-full max-w-sm overflow-y-auto border-l border-white/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(244,248,252,0.96)_100%)] px-5 pb-24 pt-12"
                 >
                   <SheetHeader className="mb-6 text-left">
+                    <div className="mb-4 flex justify-center">
+                      <Logo size="small" badge />
+                    </div>
                     <div className="rounded-[1.75rem] border border-primary/10 bg-white/90 p-4 shadow-[0_20px_40px_rgba(15,23,42,0.08)]">
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">

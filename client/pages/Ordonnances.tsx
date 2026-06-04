@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FileText, Calendar, User, Pill, CheckCircle2, Clock, XCircle, Loader2, ChevronDown, ChevronUp, Pencil, Trash2, Bell, Plus, Minus, Save, X, RefreshCw, RotateCcw, Phone, ArrowRight, Crown, Check, Shield, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -52,6 +52,7 @@ interface Ordonnance {
 
 export default function Ordonnances() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [ordonnances, setOrdonnances] = useState<Ordonnance[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -80,6 +81,12 @@ export default function Ordonnances() {
   useEffect(() => {
     fetchOrdonnances();
   }, [user]);
+
+  const authHeaders = (extra: Record<string, string> = {}) => ({
+    "Content-Type": "application/json",
+    ...(user?.id ? { "x-user-id": String(user.id) } : {}),
+    ...extra,
+  });
 
   async function fetchOrdonnances() {
     if (!user) return;
@@ -139,7 +146,7 @@ export default function Ordonnances() {
     try {
       const res = await fetch(`/api/ordonnances/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(),
         body: JSON.stringify(editForm)
       });
       if (res.ok) {
@@ -202,7 +209,8 @@ export default function Ordonnances() {
   const deleteOrdonnance = async (id: number) => {
     try {
       const res = await fetch(`/api/ordonnances/${id}`, {
-        method: "DELETE"
+        method: "DELETE",
+        headers: authHeaders(),
       });
       if (res.ok) {
         toast.success("Ordonnance supprimée définitivement");
@@ -232,7 +240,7 @@ export default function Ordonnances() {
     try {
       const res = await fetch(`/api/ordonnances/${ordonnanceId}/medicaments/${medId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(),
         body: JSON.stringify(editMedForm)
       });
       if (res.ok) {
@@ -272,7 +280,7 @@ export default function Ordonnances() {
     try {
       const res = await fetch(`/api/ordonnances/${ordonnanceId}/medicaments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(),
         body: JSON.stringify(newMedForm)
       });
       if (res.ok) {
@@ -300,8 +308,8 @@ export default function Ordonnances() {
     try {
       const res = await fetch(`/api/ordonnances/prises/${rappelId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ heure_prevue })
+        headers: authHeaders(),
+        body: JSON.stringify({ heure_prevue: new Date(heure_prevue).toISOString() })
       });
       if (res.ok) {
         toast.success("Rappel mis à jour");
@@ -319,7 +327,7 @@ export default function Ordonnances() {
     try {
       const res = await fetch(`/api/ordonnances/prises/${rappelId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(),
         body: JSON.stringify({ statut_prise: !currentStatus })
       });
       if (res.ok) {
@@ -336,7 +344,7 @@ export default function Ordonnances() {
     try {
       const res = await fetch(`/api/ordonnances/${ordonnanceId}/prises/mark-all-taken`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(),
         body: JSON.stringify({})
       });
       if (res.ok) {
@@ -347,6 +355,21 @@ export default function Ordonnances() {
       }
     } catch (error) {
       toast.error("Erreur lors de la mise à jour");
+    }
+  };
+
+  const delayRappel = async (rappelId: number, ordonnanceId: number) => {
+    try {
+      const res = await fetch(`/api/prescriptions/doses/${rappelId}/delay`, { method: "POST" });
+      if (res.ok) {
+        toast.success("Prise reportée de 1 heure");
+        fetchOrdonnanceDetails(ordonnanceId);
+        fetchOrdonnances();
+      } else {
+        toast.error("Erreur lors du report");
+      }
+    } catch {
+      toast.error("Erreur lors du report");
     }
   };
 
@@ -377,12 +400,18 @@ export default function Ordonnances() {
     <div className="min-h-screen bg-slate-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-3">
-            <FileText className="w-8 h-8 text-primary" />
-            Mes Ordonnances
-          </h1>
-          <p className="text-slate-500 mt-2">Gérez vos ordonnances et suivez les rappels</p>
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-3">
+              <FileText className="w-8 h-8 text-primary" />
+              Mes Ordonnances
+            </h1>
+            <p className="text-slate-500 mt-2">Gérez vos ordonnances et suivez les rappels</p>
+          </div>
+          <Button className="rounded-xl" onClick={() => navigate("/prescription")}>
+            <Plus className="w-4 h-4 mr-2" />
+            Nouveau rappel
+          </Button>
         </div>
 
         {/* Stats Summary */}
@@ -795,19 +824,33 @@ export default function Ordonnances() {
                                       </Button>
                                     </div>
                                   ) : (
-                                    <div 
-                                      className="text-right cursor-pointer hover:bg-slate-50 p-1 rounded"
-                                      onClick={() => {
-                                        setEditingRappelId(rappel.id);
-                                        setEditRappelForm({ heure_prevue: rappel.heure_prevue });
-                                      }}
-                                    >
-                                      <p className="text-sm font-medium text-slate-700">
-                                        {new Date(rappel.heure_prevue).toLocaleDateString('fr-FR')}
-                                      </p>
-                                      <p className="text-xs text-slate-500">
-                                        {new Date(rappel.heure_prevue).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                                      </p>
+                                    <div className="flex items-center gap-2">
+                                      <div 
+                                        className="text-right cursor-pointer hover:bg-slate-50 p-1 rounded"
+                                        onClick={() => {
+                                          setEditingRappelId(rappel.id);
+                                          const d = new Date(rappel.heure_prevue);
+                                          const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                                          setEditRappelForm({ heure_prevue: local });
+                                        }}
+                                      >
+                                        <p className="text-sm font-medium text-slate-700">
+                                          {new Date(rappel.heure_prevue).toLocaleDateString('fr-FR')}
+                                        </p>
+                                        <p className="text-xs text-slate-500">
+                                          {new Date(rappel.heure_prevue).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                        </p>
+                                      </div>
+                                      {ord.est_active && !rappel.statut_prise && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-7 text-xs rounded-lg"
+                                          onClick={() => delayRappel(rappel.id, ord.id)}
+                                        >
+                                          +1h
+                                        </Button>
+                                      )}
                                     </div>
                                   )}
                                 </div>

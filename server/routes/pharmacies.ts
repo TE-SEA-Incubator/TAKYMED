@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { db } from "../db";
+import { searchNearbyPharmacies } from "../services/pharmacySearchService";
 
 const router = Router();
 
@@ -84,6 +85,31 @@ router.post("/", (req, res) => {
     } catch (error) {
         console.error("Failed to create pharmacy:", error);
         res.status(500).json({ error: "Server error creating pharmacy" });
+    }
+});
+
+/**
+ * Recherche unifiée : pharmacies avec stock + pharmacies de garde, triées par proximité.
+ * GET /api/pharmacies/nearby?lat=&lng=&medId=&limit=&radiusKm=
+ */
+router.get("/nearby", (req, res) => {
+    const { medId, lat, lng, limit, radiusKm } = req.query;
+
+    const parsedLat = parseFloat(lat as string);
+    const parsedLng = parseFloat(lng as string);
+
+    try {
+        const result = searchNearbyPharmacies({
+            lat: Number.isNaN(parsedLat) ? undefined : parsedLat,
+            lng: Number.isNaN(parsedLng) ? undefined : parsedLng,
+            medId: medId ? parseInt(medId as string, 10) : undefined,
+            limit: limit ? parseInt(limit as string, 10) : 25,
+            radiusKm: radiusKm ? parseFloat(radiusKm as string) : 60,
+        });
+        res.json(result);
+    } catch (error) {
+        console.error("Failed nearby pharmacy search:", error);
+        res.status(500).json({ error: "Server error searching nearby pharmacies" });
     }
 });
 

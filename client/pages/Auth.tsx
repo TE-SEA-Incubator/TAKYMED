@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { AccountType } from "@shared/api";
+import Logo from "@/components/Logo1";
 
 export default function Auth({ mode }: { mode: "login" | "register" }) {
   const navigate = useNavigate();
@@ -129,10 +130,8 @@ export default function Auth({ mode }: { mode: "login" | "register" }) {
           to="/"
           className="flex flex-col items-center justify-center mb-10 group"
         >
-          <span className="mt-4 text-4xl font-black tracking-tighter text-primary">
-            TAKYMED
-          </span>
-          <span className="text-xs font-bold tracking-[0.3em] text-muted-foreground uppercase -mt-1 opacity-60">
+          <Logo size="large" badge className="mb-3 group-hover:scale-[1.02] transition-transform" />
+          <span className="text-xs font-bold tracking-[0.3em] text-muted-foreground uppercase opacity-80">
             Take Your Medicine
           </span>
         </Link>

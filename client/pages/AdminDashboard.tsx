@@ -105,6 +105,8 @@ interface MonthlyActivityPoint {
     name: string;
     prescriptions: number;
     inscriptions: number;
+    medications?: number;
+    pharmacies?: number;
 }
 
 export default function AdminDashboard() {
@@ -778,16 +780,8 @@ export default function AdminDashboard() {
 
     const usersSparkData = monthlyActivity.map((point) => ({ value: point.inscriptions }));
     const prescriptionsSparkData = monthlyActivity.map((point) => ({ value: point.prescriptions }));
-    const medsSparkData = monthlyActivity.map((point) => ({
-        value: point.prescriptions > 0 && (stats?.prescriptions || 0) > 0
-            ? Math.round(((stats?.medications || 0) / (stats?.prescriptions || 1)) * point.prescriptions)
-            : 0,
-    }));
-    const pharmaciesSparkData = monthlyActivity.map((point) => ({
-        value: point.inscriptions > 0 && (stats?.users || 0) > 0
-            ? Math.round(((stats?.pharmacies || 0) / (stats?.users || 1)) * point.inscriptions)
-            : 0,
-    }));
+    const medsSparkData = monthlyActivity.map((point) => ({ value: point.medications ?? 0 }));
+    const pharmaciesSparkData = monthlyActivity.map((point) => ({ value: point.pharmacies ?? 0 }));
 
     const typeLabels: Record<string, string> = {
         standard: "Standard",

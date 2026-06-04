@@ -26,7 +26,7 @@ import {
   Send,
   Check
 } from "lucide-react";
-import { toast } from "sonner";
+import { ensurePushIfSelected } from "@/lib/pushNotifications";
 import { cn } from "@/lib/utils";
 import { MedicationEntry, DoseSchedule, FrequencyType } from "@shared/api";
 import { useAuth } from "@/context/AuthContext";
@@ -79,8 +79,10 @@ export default function Prescription() {
 
   const [notifConfig, setNotifConfig] = useState({
     recipients: [initialClientPhone || user?.phone || ""],
-    channels: ["whatsapp"] as Array<"sms" | "whatsapp" | "call">
+    channels: ["whatsapp", "push"] as Array<"sms" | "whatsapp" | "call" | "push">
   });
+
+  const needsPhoneRecipient = notifConfig.channels.some((c) => c !== "push");
 
   // Custom dates for each day (allows modification with propagation)
   const [customDates, setCustomDates] = useState<Record<number, string>>({});
@@ -800,7 +802,7 @@ export default function Prescription() {
                   {/* Channels Section */}
                   <div className="w-full space-y-2 sm:space-y-3">
                     <p className="text-xs sm:text-sm text-muted-foreground font-semibold uppercase">Canaux de notification</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                       <NotificationOption
                         selected={notifConfig.channels.includes('sms')}
                         onClick={() => setNotifConfig({ ...notifConfig, channels: notifConfig.channels.includes('sms') ? notifConfig.channels.filter(c => c !== 'sms') : [...notifConfig.channels, 'sms'] })}
@@ -821,6 +823,13 @@ export default function Prescription() {
                         icon={<PhoneCall className="w-3 sm:w-4 h-3 sm:h-4" />}
                         label={t('prescription.call')}
                         color="#3b82f6"
+                      />
+                      <NotificationOption
+                        selected={notifConfig.channels.includes('push')}
+                        onClick={() => setNotifConfig({ ...notifConfig, channels: notifConfig.channels.includes('push') ? notifConfig.channels.filter(c => c !== 'push') : [...notifConfig.channels, 'push'] })}
+                        icon={<Bell className="w-3 sm:w-4 h-3 sm:h-4" />}
+                        label="Push"
+                        color="#8b5cf6"
                       />
                     </div>
                   </div>
@@ -845,7 +854,11 @@ export default function Prescription() {
                 </span>
                 <Button
                   size="lg"
-                  disabled={isSubmitting || notifConfig.recipients.filter((r) => r.trim()).length === 0 || notifConfig.channels.length === 0}
+                  disabled={
+                    isSubmitting ||
+                    notifConfig.channels.length === 0 ||
+                    (needsPhoneRecipient && notifConfig.recipients.filter((r) => r.trim()).length === 0)
+                  }
                   className="w-full sm:w-auto rounded-xl sm:rounded-2xl h-10 sm:h-12 md:h-14 px-4 sm:px-8 md:px-12 text-sm sm:text-base md:text-lg font-bold shadow-xl shadow-primary/20 bg-green-600 hover:bg-green-700 disabled:opacity-50"
                   onClick={async () => {
                     if (!user) {
@@ -881,20 +894,23 @@ export default function Prescription() {
 
                       if (!res.ok) throw new Error("Erreur de sauvegarde");
 
-                      // 2. Simulation Step
-                      const activeRecipients = notifConfig.recipients.filter((r) => r.trim());
-                      const methodsLabel = notifConfig.channels.map((c) => c === 'sms' ? 'SMS' : c === 'call' ? 'Appel vocal' : 'WhatsApp').join(', ');
+                      await ensurePushIfSelected(user.id, notifConfig.channels);
 
-                      toast.info(`Initialisation de l'envoi des rappels...`, { duration: 2000 });
+                      const methodsLabel = notifConfig.channels
+                        .map((c) =>
+                          c === "sms"
+                            ? "SMS"
+                            : c === "call"
+                              ? "Appel vocal"
+                              : c === "push"
+                                ? "Push"
+                                : "WhatsApp",
+                        )
+                        .join(", ");
 
-                      await new Promise(r => setTimeout(r, 1500));
-                      toast.loading(`Envoi de la confirmation via ${methodsLabel} à ${activeRecipients.length} numéro(s)...`, { id: "simul-notif" });
-
-                      await new Promise(r => setTimeout(r, 2000));
-                      toast.success(`Succès : Programme de rappel activé pour ${medications.length} médicament(s).`, { id: "simul-notif" });
-
-                      await new Promise(r => setTimeout(r, 1000));
-                       toast.success("Ordonnance enregistrée avec succès !");
+                      toast.success(
+                        `Ordonnance enregistrée. Rappels activés via : ${methodsLabel}.`,
+                      );
 
                        setTimeout(() => {
                            if (user.type === 'commercial') {

@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DoseSchedule } from "@shared/api";
 import { toast } from "sonner";
+import Logo from "@/components/Logo1";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -164,7 +165,8 @@ export default function Dashboard() {
         {/* Welcome Header */}
         <div className="bg-white p-6 md:p-10 rounded-[2.5rem] border shadow-2xl mb-8 md:mb-12 flex flex-col md:flex-row justify-between items-center gap-6 md:gap-10 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[80px] -mr-32 -mt-32" />
-          <div className="flex items-center gap-8 relative z-10">
+          <div className="flex items-center gap-5 md:gap-8 relative z-10 w-full">
+            <Logo size="small" badge className="hidden sm:block shrink-0" />
             <div className="flex-1">
               <div className="flex items-center gap-3">
                 <h1 className="text-4xl font-black tracking-tighter mb-1">
@@ -406,7 +408,7 @@ export default function Dashboard() {
                       <DashboardStat
                         label={t("dashboard.adherence")}
                         value={stats ? `${stats.observanceRate}%` : "0%"}
-                        subtext="Cette semaine"
+                        subtext="Sur les doses échues"
                       />
                       <DashboardStat
                         label={t("dashboard.activeReminders")}
@@ -416,7 +418,7 @@ export default function Dashboard() {
                       <DashboardStat
                         label={t("dashboard.nearbyPharmacies")}
                         value={stats ? stats.nearbyPharmacies.toString() : "0"}
-                        subtext="À proximité"
+                        subtext="Avec stock disponible"
                       />
                     </div>
                   )}

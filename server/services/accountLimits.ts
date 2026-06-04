@@ -6,7 +6,7 @@ export interface UserAccountLimits {
 }
 
 export function refreshOrdonnanceActiveState(userId: number): void {
-  // 1) Validate completed ordonnances: no pending dose left.
+  // 1) Désactiver les ordonnances entièrement terminées (plus aucune prise en attente).
   db.prepare(
     `
       UPDATE Ordonnances
@@ -19,24 +19,6 @@ export function refreshOrdonnanceActiveState(userId: number): void {
           JOIN CalendrierPrises cp ON cp.id_element_ordonnance = eo.id_element_ordonnance
           WHERE eo.id_ordonnance = Ordonnances.id_ordonnance
             AND cp.statut_prise = 0
-        )
-    `,
-  ).run(userId);
-
-  // 2) Expire old ordonnances: all planned doses are in the past.
-  db.prepare(
-    `
-      UPDATE Ordonnances
-      SET est_active = 0
-      WHERE id_utilisateur = ?
-        AND est_active = 1
-        AND EXISTS (
-          SELECT 1
-          FROM ElementsOrdonnance eo
-          JOIN CalendrierPrises cp ON cp.id_element_ordonnance = eo.id_element_ordonnance
-          WHERE eo.id_ordonnance = Ordonnances.id_ordonnance
-          GROUP BY eo.id_ordonnance
-          HAVING MAX(datetime(cp.heure_prevue)) < datetime('now')
         )
     `,
   ).run(userId);

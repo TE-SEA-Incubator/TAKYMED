@@ -252,11 +252,33 @@ export default function CommercialRegister() {
     return clashes;
   }, [medications, interactions]);
 
-  const handleNextStep = () => {
+  const handleNextStep = async () => {
     if (step === 1) {
       if (!clientInfo.name.trim()) { toast.error("Le nom du client est requis."); return; }
       if (!clientInfo.phone.trim()) { toast.error("Le numéro de téléphone est requis."); return; }
-      setPatient(prev => ({ ...prev, title: clientInfo.name }));
+      if (!user?.id) { toast.error("Vous devez être connecté"); return; }
+
+      try {
+        const dialCode = countries.find(c => c.code === selectedCountry)?.dialCode || "+237";
+        const fullPhone = `${dialCode}${clientInfo.phone.replace(/\s+/g, '')}`;
+        const res = await fetch(
+          `/api/commercial/check-client?commercialId=${user.id}&name=${encodeURIComponent(clientInfo.name.trim())}&phone=${encodeURIComponent(fullPhone)}`,
+          { headers: { "x-user-id": user.id.toString() } }
+        );
+        if (res.ok) {
+          const availability = await res.json();
+          if (!availability.available) {
+            toast.error(availability.errors?.[0] || "Ce client ne peut pas être inscrit.");
+            return;
+          }
+        }
+      } catch (error) {
+        console.error("Vérification client:", error);
+        toast.error("Impossible de vérifier la disponibilité du client.");
+        return;
+      }
+
+      setPatient(prev => ({ ...prev, title: clientInfo.name.trim() }));
       setStep(2);
     } else if (step === 2) {
       if (medications.some(m => !m.name)) { toast.error("Veuillez remplir le nom de tous les médicaments."); return; }
@@ -297,7 +319,7 @@ export default function CommercialRegister() {
       if (!res.ok) {
         const err = await res.json();
         if (res.status === 409) {
-          throw new Error("Ce client est déjà inscrit dans le système.");
+          throw new Error(err.error || "Ce client existe déjà dans le système.");
         }
         throw new Error(err.error || "Erreur lors de l'inscription");
       }

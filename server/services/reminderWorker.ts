@@ -1,61 +1,63 @@
 import { db } from "../db";
-import { notificationProvider } from "../services/notificationProvider";
+import { notificationProvider } from "./notificationProvider";
+import { getActiveNotificationPreferences } from "./notificationPreferencesService";
+import { sendPushToUser } from "./pushNotificationService";
 
-// Intervalle de vérification des rappels (30 secondes)
 const REMINDER_CHECK_INTERVAL = 30 * 1000;
-
-// Flag pour éviter les exécutions concurrentes
 let isChecking = false;
+let workerTimeout: NodeJS.Timeout | null = null;
 
-// Générer le message de rappel (supporte plusieurs médicaments à la même heure)
-function generateCombinedReminderMessage(patientName: string, items: any[]): string {
-  if (items.length === 0) return "";
-  
-  // Dédupliquer les items physiques par id_calendrier_prise
-  const uniqueItemsMap = new Map();
-  items.forEach(item => {
+interface DueDoseRow {
+  id_calendrier_prise: number;
+  heure_prevue: string;
+  dose: number | string;
+  nom_unite: string;
+  med_name: string;
+  nom_patient: string;
+  numero_telephone: string;
+  id_utilisateur: number;
+  tentatives_rappel: number;
+}
+
+function generateCombinedReminderMessage(patientName: string, items: DueDoseRow[]): string {
+  const uniqueItemsMap = new Map<number, DueDoseRow>();
+  items.forEach((item) => {
     if (!uniqueItemsMap.has(item.id_calendrier_prise)) {
       uniqueItemsMap.set(item.id_calendrier_prise, item);
     }
   });
   const uniqueItems = Array.from(uniqueItemsMap.values());
+  if (uniqueItems.length === 0) return "";
 
-  const firstItem = uniqueItems[0];
-  const scheduledTime = new Date(firstItem.heure_prevue);
-  
+  const scheduledTime = new Date(uniqueItems[0].heure_prevue);
   const hour = scheduledTime.getHours();
-  const greeting = (hour >= 18 || hour < 6) ? "Bonsoir" : "Bonjour";
-  const timeStr = scheduledTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
-  
-  // Grouper par nom de médicament pour éviter les répétitions (ex: "doliprane : 1" x 4 -> "doliprane : 4")
-  const groupedMeds = new Map<string, { dose: number, unite: string }>();
-  uniqueItems.forEach(item => {
+  const greeting = hour >= 18 || hour < 6 ? "Bonsoir" : "Bonjour";
+  const timeStr = scheduledTime
+    .toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+    .replace(":", "h");
+
+  const groupedMeds = new Map<string, { dose: number; unite: string; rawDose?: string }>();
+  uniqueItems.forEach((item) => {
     const key = item.med_name;
     const current = groupedMeds.get(key) || { dose: 0, unite: item.nom_unite || "" };
-    
-    // Essayer de parser la dose en nombre
-    const doseNum = parseFloat(String(item.dose).replace(',', '.'));
-    if (!isNaN(doseNum)) {
+    const doseNum = parseFloat(String(item.dose).replace(",", "."));
+    if (!Number.isNaN(doseNum)) {
       current.dose += doseNum;
-    } else {
-      // Si ce n'est pas un nombre, on garde la première valeur si non numérique
-      if (current.dose === 0) (current as any).rawDose = item.dose;
+    } else if (current.dose === 0) {
+      current.rawDose = String(item.dose);
     }
     groupedMeds.set(key, current);
   });
 
-  const medsList = Array.from(groupedMeds.entries()).map(([name, info]) => {
-    const doseDisplay = (info as any).rawDose || info.dose;
-    return `${name} : ${doseDisplay} ${info.unite}`.trim();
-  }).join("\n");
-  
+  const medsList = Array.from(groupedMeds.entries())
+    .map(([name, info]) => {
+      const doseDisplay = info.rawDose || info.dose;
+      return `${name} : ${doseDisplay} ${info.unite}`.trim();
+    })
+    .join("\n");
+
   return `${greeting} MR/Mme ${patientName} ; c'est l'heure de prendre vos médicaments de ${timeStr} :\n${medsList}`;
 }
-
-/**
- * Worker de rappels
- */
-let workerTimeout: NodeJS.Timeout | null = null;
 
 export function startReminderWorker() {
   if (workerTimeout) {
@@ -64,7 +66,7 @@ export function startReminderWorker() {
   }
 
   console.log("🚀 Starting reminder worker (30s interval)...");
-  
+
   const runWorker = async () => {
     try {
       await checkAndSendReminders();
@@ -80,20 +82,17 @@ export function startReminderWorker() {
 
 async function checkAndSendReminders() {
   if (isChecking) return;
-  
   isChecking = true;
+
   try {
     const now = new Date();
-    // On cherche les rappels dus (fenêtre large pour rattrapage) 
-    // qui n'ont pas encore été envoyés ET qui ont moins de 3 tentatives
-    // ET dont le dernier essai remonte à plus de 5 minutes (pour éviter le spam en cas d'erreur)
-    // Compenser le décalage horaire (Serveur UTC vs Client Cameroun UTC+1)
-    // On regarde 65 minutes dans le futur (1h + 5min de marge)
     const plus65Str = new Date(now.getTime() + 65 * 60 * 1000).toISOString();
     const minus24HoursStr = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
     const retryCooldownStr = new Date(now.getTime() - 5 * 60 * 1000).toISOString();
 
-    const dueReminders = db.prepare(`
+    const dueDoses = db
+      .prepare(
+        `
       SELECT
         cp.id_calendrier_prise,
         cp.heure_prevue,
@@ -101,8 +100,6 @@ async function checkAndSendReminders() {
         u.nom_unite,
         m.nom as med_name,
         o.nom_patient,
-        pnu.valeur_contact,
-        cn.nom_canal,
         u2.numero_telephone,
         u2.id_utilisateur,
         cp.tentatives_rappel
@@ -112,38 +109,27 @@ async function checkAndSendReminders() {
       JOIN Medicaments m ON eo.id_medicament = m.id_medicament
       JOIN Unites u ON cp.id_unite = u.id_unite
       JOIN Utilisateurs u2 ON o.id_utilisateur = u2.id_utilisateur
-      LEFT JOIN PreferencesNotificationUtilisateurs pnu ON u2.id_utilisateur = pnu.id_utilisateur
-      LEFT JOIN CanauxNotification cn ON pnu.id_canal = cn.id_canal
       WHERE cp.rappel_envoye = 0
         AND cp.tentatives_rappel < 3
         AND (cp.dernier_essai IS NULL OR cp.dernier_essai <= ?)
         AND cp.heure_prevue <= ?
         AND cp.heure_prevue >= ?
-        AND (pnu.est_active = 1 OR pnu.est_active IS NULL)
         AND o.est_active = 1
-    `).all(retryCooldownStr, plus65Str, minus24HoursStr) as any[];
+    `,
+      )
+      .all(retryCooldownStr, plus65Str, minus24HoursStr) as DueDoseRow[];
 
-    if (dueReminders.length === 0) {
-      return;
-    }
+    if (dueDoses.length === 0) return;
 
-    const groups: Record<string, any[]> = {};
-    dueReminders.forEach(r => {
-      // Prioritize the specific contact value (e.g., changed number) over the account number
-      const contact = r.valeur_contact || r.numero_telephone;
-      // On groupe par contact, patient et heure prévue pour envoyer un seul message groupé
-      const key = `${contact}_${r.nom_patient}_${r.heure_prevue}_${r.nom_canal || "SMS"}`;
+    const groups: Record<string, DueDoseRow[]> = {};
+    dueDoses.forEach((row) => {
+      const key = `${row.id_utilisateur}_${row.nom_patient}_${row.heure_prevue}`;
       if (!groups[key]) groups[key] = [];
-      groups[key].push(r);
+      groups[key].push(row);
     });
 
-    for (const [key, items] of Object.entries(groups)) {
-      const contact = items[0].valeur_contact || items[0].numero_telephone;
-      try {
-        await sendCombinedReminders(contact, items);
-      } catch (error) {
-        console.error(`Failed to send combined reminders to ${contact}:`, error);
-      }
+    for (const items of Object.values(groups)) {
+      await sendCombinedReminders(items);
     }
   } catch (error) {
     console.error("Critical error in reminder worker:", error);
@@ -152,115 +138,202 @@ async function checkAndSendReminders() {
   }
 }
 
-async function sendCombinedReminders(contact: string, items: any[]) {
+async function sendCombinedReminders(items: DueDoseRow[]) {
   const patientName = items[0].nom_patient;
-  const channel = items[0].nom_canal || "SMS";
   const userId = items[0].id_utilisateur;
   const message = generateCombinedReminderMessage(patientName, items);
+  const ids = items.map((i) => i.id_calendrier_prise);
+  const placeholders = ids.map(() => "?").join(",");
 
-  const ids = items.map(i => i.id_calendrier_prise);
-  const placeholders = ids.map(() => '?').join(',');
-
-  // Marquage immédiat comme envoyé (optimiste) pour éviter les doublons/boucles infinies
-  // comme demandé par l'utilisateur ("si il en envoi une celle ci est automatiquement consider comme envoyé")
-  db.prepare(`
-    UPDATE CalendrierPrises 
+  db.prepare(
+    `
+    UPDATE CalendrierPrises
     SET tentatives_rappel = tentatives_rappel + 1,
-        dernier_essai = datetime('now'),
-        rappel_envoye = 1
+        dernier_essai = datetime('now')
     WHERE id_calendrier_prise IN (${placeholders})
-  `).run(...ids);
+  `,
+  ).run(...ids);
 
-  console.log(`📤 [Attempt] Sending ${channel} to ${contact} (${items.length} items grouped)`);
+  const prefs = getActiveNotificationPreferences(userId);
+  const uniquePrefs = dedupePreferences(prefs);
 
-  const jobId = db.prepare(`
-    INSERT INTO NotificationJobs (id_utilisateur, channel, message, contact_value, scheduled_at, status)
-    VALUES (?, ?, ?, ?, ?, 'processing')
-  `).run(userId, channel, message, contact, new Date().toISOString()).lastInsertRowid as number;
+  console.log(
+    `📤 Sending reminders to user ${userId} via ${uniquePrefs.map((p) => p.channelName).join(", ")} (${items.length} doses)`,
+  );
 
-  let result;
-  try {
-    if (channel === "SMS") {
-      result = await notificationProvider.sendSMS(contact, message);
-    } else if (channel === "WhatsApp") {
-      result = await notificationProvider.sendWhatsApp(contact, message);
-    } else if (channel === "Appel") {
-      result = await notificationProvider.sendVoiceCall(contact, message);
-      // Pour les appels, on marque comme 'calling' pour le worker de fallback
-      if (result.success) result.statusOverride = 'calling';
-    } else {
-      result = { success: false, error: "Unsupported channel" };
+  let anySuccess = false;
+
+  for (const pref of uniquePrefs) {
+    const contact = pref.contact || items[0].numero_telephone;
+    const jobId = db
+      .prepare(
+        `
+      INSERT INTO NotificationJobs (id_utilisateur, channel, message, contact_value, scheduled_at, status)
+      VALUES (?, ?, ?, ?, ?, 'processing')
+    `,
+      )
+      .run(userId, pref.channelName, message, contact, new Date().toISOString())
+      .lastInsertRowid as number;
+
+    let result: { success: boolean; error?: string; messageId?: string; statusOverride?: string };
+
+    try {
+      if (pref.channelName === "SMS") {
+        result = await notificationProvider.sendSMS(contact, message);
+      } else if (pref.channelName === "WhatsApp") {
+        result = await notificationProvider.sendWhatsApp(contact, message);
+      } else if (pref.channelName === "Appel") {
+        result = await notificationProvider.sendVoiceCall(contact, message);
+        if (result.success) result.statusOverride = "calling";
+      } else if (pref.channelName === "Push") {
+        const pushResult = await sendPushToUser(userId, "Rappel TAKYMED", message, {
+          type: "reminder",
+          doseIds: ids.join(","),
+        });
+        result = {
+          success: pushResult.success,
+          messageId: pushResult.inAppId ? String(pushResult.inAppId) : undefined,
+          error: pushResult.errors.join("; ") || undefined,
+        };
+      } else {
+        result = { success: false, error: "Canal non supporté" };
+      }
+    } catch (error) {
+      result = {
+        success: false,
+        error: error instanceof Error ? error.message : "Erreur inconnue",
+      };
     }
-  } catch (error: any) {
-    result = { success: false, error: error.message };
-  }
 
-  // Mettre à jour le job et les logs
-  const finalStatus = result.statusOverride || (result.success ? 'sent' : 'failed');
-  db.prepare(`UPDATE NotificationJobs SET status = ?, processed_at = datetime('now') WHERE id_job = ?`).run(finalStatus, jobId);
+    const finalStatus = result.statusOverride || (result.success ? "sent" : "failed");
+    db.prepare(
+      `UPDATE NotificationJobs SET status = ?, processed_at = datetime('now') WHERE id_job = ?`,
+    ).run(finalStatus, jobId);
 
-  const providerName = (notificationProvider.constructor.name.includes('Orange') ? 'orange' : 'mock');
-  try {
-    db.prepare(`
+    const providerName = notificationProvider.constructor.name.includes("Orange")
+      ? "orange"
+      : "mock";
+
+    try {
+      db.prepare(
+        `
         INSERT INTO NotificationLogs (id_job, provider, channel, to_contact, message, status, error_message, provider_message_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(jobId, providerName, channel, contact, message, finalStatus, result.error, result.messageId || null);
-  } catch (logError) {
+      `,
+      ).run(
+        jobId,
+        providerName,
+        pref.channelName,
+        contact,
+        message,
+        finalStatus,
+        result.error || null,
+        result.messageId || null,
+      );
+    } catch (logError) {
       console.error("Failed to insert notification log:", logError);
+    }
+
+    if (result.success) {
+      anySuccess = true;
+      console.log(`✅ ${pref.channelName} sent for ${patientName}`);
+    } else {
+      console.log(`❌ ${pref.channelName} failed: ${result.error}`);
+    }
   }
 
-  if (!result.success) {
-    console.log(`❌ Failed: ${result.error}`);
-    // Note: on ne repasse pas rappel_envoye à 0 pour respecter la consigne de l'utilisateur
-  } else {
-    console.log(`✅ Sent to ${patientName}`);
+  if (anySuccess) {
+    db.prepare(
+      `
+      UPDATE CalendrierPrises SET rappel_envoye = 1
+      WHERE id_calendrier_prise IN (${placeholders})
+    `,
+    ).run(...ids);
   }
 }
 
-/**
- * Gère les appels non décrochés : si pas de réponse après 1 min, envoie un WhatsApp
- */
+function dedupePreferences(
+  prefs: Array<{ channelId: number; channelName: string; contact: string }>,
+) {
+  const seen = new Set<string>();
+  return prefs.filter((pref) => {
+    const key = `${pref.channelName}|${pref.contact}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 async function handleVoiceFallbacks() {
   try {
-    // Récupérer les jobs d'appel en cours depuis plus d'une minute
-    const pendingCalls = db.prepare(`
-      SELECT nj.*, nl.provider_message_id 
+    const pendingCalls = db
+      .prepare(
+        `
+      SELECT nj.*, nl.provider_message_id
       FROM NotificationJobs nj
       JOIN NotificationLogs nl ON nj.id_job = nl.id_job
-      WHERE nj.channel = 'Appel' 
+      WHERE nj.channel = 'Appel'
         AND nj.status = 'calling'
         AND nj.created_at <= datetime('now', '-1 minute')
-    `).all() as any[];
+    `,
+      )
+      .all() as Array<{
+      id_job: number;
+      contact_value: string;
+      message: string;
+      id_utilisateur: number;
+      provider_message_id: string;
+    }>;
 
     for (const job of pendingCalls) {
-      console.log(`📞 Checking status for Call Job ${job.id_job} to ${job.contact_value}...`);
-      
-      const statusCheck = await notificationProvider.checkStatus(job.provider_message_id, "Voice");
-      
+      const statusCheck = await notificationProvider.checkStatus(
+        job.provider_message_id,
+        "Voice",
+      );
+
       if (statusCheck.status === "answered") {
-        console.log(`✅ Call ${job.id_job} was answered. No fallback needed.`);
-        db.prepare(`UPDATE NotificationJobs SET status = 'sent' WHERE id_job = ?`).run(job.id_job);
+        db.prepare(`UPDATE NotificationJobs SET status = 'sent' WHERE id_job = ?`).run(
+          job.id_job,
+        );
       } else if (statusCheck.status === "no-answer") {
-        console.log(`⌛ Call ${job.id_job} not answered. Triggering WhatsApp fallback...`);
-        
-        // Marquer comme failed pour cet essai d'appel
-        db.prepare(`UPDATE NotificationJobs SET status = 'fallback_triggered' WHERE id_job = ?`).run(job.id_job);
-        
-        // Envoyer le message WhatsApp de secours
+        db.prepare(`UPDATE NotificationJobs SET status = 'fallback_triggered' WHERE id_job = ?`).run(
+          job.id_job,
+        );
+
         const fallbackMsg = `${job.message}\n(Ceci est un message de rappel suite à notre tentative d'appel restée sans réponse.)`;
         const waResult = await notificationProvider.sendWhatsApp(job.contact_value, fallbackMsg);
-        
-        // Logger l'envoi WhatsApp de secours
-        const providerName = (notificationProvider.constructor.name.includes('Orange') ? 'orange' : 'mock');
-        const fallbackJobId = db.prepare(`
+
+        const providerName = notificationProvider.constructor.name.includes("Orange")
+          ? "orange"
+          : "mock";
+        const fallbackJobId = db
+          .prepare(
+            `
           INSERT INTO NotificationJobs (id_utilisateur, channel, message, contact_value, scheduled_at, status, processed_at)
           VALUES (?, 'WhatsApp', ?, ?, datetime('now'), ?, datetime('now'))
-        `).run(job.id_utilisateur, fallbackMsg, job.contact_value, waResult.success ? 'sent' : 'failed').lastInsertRowid;
+        `,
+          )
+          .run(
+            job.id_utilisateur,
+            fallbackMsg,
+            job.contact_value,
+            waResult.success ? "sent" : "failed",
+          ).lastInsertRowid;
 
-        db.prepare(`
+        db.prepare(
+          `
           INSERT INTO NotificationLogs (id_job, provider, channel, to_contact, message, status, error_message, provider_message_id)
           VALUES (?, ?, 'WhatsApp', ?, ?, ?, ?, ?)
-        `).run(fallbackJobId, providerName, job.contact_value, fallbackMsg, waResult.success ? "sent" : "failed", waResult.error, waResult.messageId || null);
+        `,
+        ).run(
+          fallbackJobId,
+          providerName,
+          job.contact_value,
+          fallbackMsg,
+          waResult.success ? "sent" : "failed",
+          waResult.error || null,
+          waResult.messageId || null,
+        );
       }
     }
   } catch (error) {

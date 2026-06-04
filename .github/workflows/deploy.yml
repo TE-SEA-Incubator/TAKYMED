@@ -1,97 +1,59 @@
-name: Deploy to Production Server
+name: Deploy (push.sh)
 
 on:
   push:
-    branches: [ master, main ]
-  pull_request:
-    branches: [ master, main ]
-    types: [closed]
+    branches: [main, master]
   workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js 20
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-        
-    - name: Install dependencies
-      run: npm ci
-      
-    - name: Install SSH tools
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y rsync
-      
-    - name: Setup SSH
-      run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
-        ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
-        
-    - name: Deploy to server
-      env:
-        HOST: ${{ secrets.SERVER_HOST }}
-        USER: ${{ secrets.SERVER_USER }}
-      run: |
-        cat > rsync-exclude.txt << 'RSYNC_EOF'
-        .env
-        bd.sqlite*
-        uploads/
-        node_modules/
-        dist/
-        .git/
-        .gitignore
-        RSYNC_EOF
-        
-        rsync -avz --exclude-from=rsync-exclude.txt \
-          -e "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no" \
-          ./ $USER@$HOST:/home/TAKYMED/
-          
-    - name: Install dependencies on server
-      run: |
-        ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "cd /home/TAKYMED && npm ci --production"
-        
-    - name: Build on server
-      run: |
-        ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "cd /home/TAKYMED && npm run build"
-        
-    - name: Restart application
-      run: |
-        ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "cd /home/TAKYMED && (pm2 reload takymed || pm2 start dist/server/node-build.mjs --name takymed) && pm2 save"
-        
-    - name: Health check
-      env:
-        APP_URL: ${{ secrets.APP_URL }}
-      run: |
-        echo "Waiting for server to start..."
-        for i in {1..5}; do
-          if curl -f -s "${{ secrets.APP_URL }}" > /dev/null; then
-            echo "✅ Health check passed! Application is responding."
-            break
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install SSH tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync openssh-client sshpass
+
+      - name: Write .env from secret
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          if [ -z "$ENV_FILE" ]; then
+            echo "❌ Secret ENV_FILE manquant. Ajoutez le contenu complet de votre .env dans Settings → Secrets → ENV_FILE"
+            exit 1
           fi
-          echo "Attempt $i/5 failed, waiting 10 seconds..."
-          sleep 10
-          if [ $i -eq 5 ]; then
-            echo "❌ Health check failed after 5 attempts"
-            false
+          printf '%s\n' "$ENV_FILE" > .env
+          chmod 600 .env
+
+      - name: Configure SSH key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          if [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+            printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
           fi
-        done
-        
-    - name: Notify deployment status
-      if: always()
-      run: |
-        if [ "${{ job.status }}" == "success" ]; then
-          echo "🎉 Deployment successful!"
-        else
-          echo "❌ Deployment failed!"
-        fi
+          SERVER_IP=$(grep -E '^SERVER_IP=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
+          if [ -n "$SERVER_IP" ]; then
+            ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
+          fi
+
+      - name: Deploy with push.sh
+        run: bash scripts/push.sh
+
+      - name: Deployment summary
+        if: success()
+        run: |
+          DOMAIN=$(grep -E '^DOMAIN=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
+          PORT=$(grep -E '^PORT=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
+          SERVER_IP=$(grep -E '^SERVER_IP=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
+          HOST="${DOMAIN:-$SERVER_IP}"
+          echo "🚀 Déploiement réussi sur http://${HOST}:${PORT:-3500}"

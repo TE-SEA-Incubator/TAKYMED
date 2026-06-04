@@ -124,7 +124,7 @@ router.get("/monthly-activity", (_req, res) => {
             ORDER BY year, month
         `).all() as { month: string; year: string; count: number }[];
 
-        // Get user registrations (visits/sessions) per month
+        // Get user registrations per month
         const visitsByMonth = db.prepare(`
             SELECT 
                 strftime('%m', cree_le) as month,
@@ -135,6 +135,33 @@ router.get("/monthly-activity", (_req, res) => {
             GROUP BY year, month
             ORDER BY year, month
         `).all() as { month: string; year: string; count: number }[];
+
+        const medicationsByMonth = db.prepare(`
+            SELECT
+                strftime('%m', date_ajout) as month,
+                strftime('%Y', date_ajout) as year,
+                COUNT(*) as count
+            FROM Medicaments
+            WHERE date_ajout >= date('now', '-7 months')
+            GROUP BY year, month
+            ORDER BY year, month
+        `).all() as { month: string; year: string; count: number }[];
+
+        let pharmaciesByMonth: { month: string; year: string; count: number }[] = [];
+        try {
+            pharmaciesByMonth = db.prepare(`
+                SELECT
+                    strftime('%m', mis_a_jour_le) as month,
+                    strftime('%Y', mis_a_jour_le) as year,
+                    COUNT(*) as count
+                FROM PharmaciesGarde
+                WHERE mis_a_jour_le >= date('now', '-7 months')
+                GROUP BY year, month
+                ORDER BY year, month
+            `).all() as { month: string; year: string; count: number }[];
+        } catch {
+            pharmaciesByMonth = [];
+        }
 
         // Generate last 7 months labels (chronological order)
         const months = [];
@@ -151,10 +178,14 @@ router.get("/monthly-activity", (_req, res) => {
         const data = months.map(m => {
             const presc = prescriptionsByMonth.find(p => `${p.year}-${p.month}` === m.key);
             const inscriptions = visitsByMonth.find(v => `${v.year}-${v.month}` === m.key);
+            const meds = medicationsByMonth.find(v => `${v.year}-${v.month}` === m.key);
+            const pharmacies = pharmaciesByMonth.find(v => `${v.year}-${v.month}` === m.key);
             return {
                 name: m.label.charAt(0).toUpperCase() + m.label.slice(1),
                 prescriptions: presc?.count || 0,
-                inscriptions: inscriptions?.count || 0
+                inscriptions: inscriptions?.count || 0,
+                medications: meds?.count || 0,
+                pharmacies: pharmacies?.count || 0,
             };
         });
 

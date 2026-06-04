@@ -50,6 +50,7 @@ $SSH_CMD $REMOTE_USER@$REMOTE_HOST "mkdir -p $REMOTE_DIR/public/uploads && chown
 # 2. Sync code (without dist, will build on server)
 echo "📦 Syncing files..."
 rsync -av -e "$RSYNC_SSH" --progress "$SOURCE_DIR/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/" \
+    --exclude 'mobile' \
     --exclude 'node_modules' \
     --exclude 'dist' \
     --exclude '.git' \
@@ -62,6 +63,14 @@ rsync -av -e "$RSYNC_SSH" --progress "$SOURCE_DIR/" "$REMOTE_USER@$REMOTE_HOST:$
     --exclude '/data/wa_backups/***' \
     --exclude 'data/wa_backups/***' \
     --exclude 'public/uploads/*' || { echo "❌ File synchronization failed."; exit 1; }
+
+# 2.5 Sync .env (local ou généré par GitHub Actions via secret ENV_FILE)
+if [ -f "$SOURCE_DIR/.env" ]; then
+    echo "🔐 Syncing .env to remote..."
+    rsync -av -e "$RSYNC_SSH" "$SOURCE_DIR/.env" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/.env" \
+        || { echo "❌ .env synchronization failed."; exit 1; }
+    $SSH_CMD $REMOTE_USER@$REMOTE_HOST "chmod 600 $REMOTE_DIR/.env" || true
+fi
 
 # 3. Build on Remote
 echo "�️ Building on remote server..."
@@ -80,7 +89,9 @@ $SSH_CMD $REMOTE_USER@$REMOTE_HOST "cd $REMOTE_DIR && \
 # 4. Restart the application with PM2
 echo "🔄 Restarting application with PM2..."
 $SSH_CMD $REMOTE_USER@$REMOTE_HOST "cd $REMOTE_DIR && \
-    pm2 reload takymed || (PORT=$PORT pm2 start dist/server/node-build.mjs --name takymed) && \
+    pm2 stop takymed-backend 2>/dev/null || true && \
+    pm2 delete takymed-backend 2>/dev/null || true && \
+    pm2 restart takymed --update-env || (PORT=$PORT pm2 start dist/server/node-build.mjs --name takymed) && \
     pm2 save" || { echo "❌ Failed to restart application with PM2."; exit 1; }
 
 # 5. Health Check

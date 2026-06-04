@@ -1,8 +1,3 @@
-import { Router } from "express";
-import { db } from "../db";
-import { z } from "zod";
-
-// Interface pour les providers de notification
 interface NotificationProvider {
   sendSMS(to: string, message: string): Promise<{ success: boolean; messageId?: string; error?: string }>;
   sendWhatsApp(to: string, message: string): Promise<{ success: boolean; messageId?: string; error?: string }>;
@@ -216,59 +211,5 @@ console.log(`📱 ORANGE_SENDER_ADDRESS: ${process.env.ORANGE_SENDER_ADDRESS || 
 console.log(`📱 ORANGE_SENDER_NAME: ${process.env.ORANGE_SENDER_NAME || 'Not set'}`);
 console.log(`📱 Tous les SMS utilisent maintenant l'API Orange réelle !`);
 
-const router = Router();
-
-// Route de test pour administrateurs
-router.post("/test-send", async (req, res) => {
-  try {
-    const { channel, to, message } = z.object({
-      channel: z.enum(["SMS", "WhatsApp", "Voice"]),
-      to: z.string().min(1),
-      message: z.string().min(1)
-    }).parse(req.body);
-
-    let result;
-    switch (channel) {
-      case "SMS":
-        result = await notificationProvider.sendSMS(to, message);
-        break;
-      case "WhatsApp":
-        result = await notificationProvider.sendWhatsApp(to, message);
-        break;
-      case "Voice":
-        result = await notificationProvider.sendVoiceCall(to, message);
-        break;
-    }
-
-    // Determine the provider name for logging
-    const providerName = (notificationProvider instanceof OrangeSMSProvider) ? "orange" : "mock";
-
-    // Log dans NotificationLogs
-    db.prepare(`
-      INSERT INTO NotificationLogs (provider, channel, to_contact, message, status, error_message, provider_message_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      providerName, // Use the determined provider name
-      channel,
-      to,
-      message,
-      result.success ? "sent" : "failed",
-      result.error,
-      result.messageId
-    );
-
-    res.json({
-      success: result.success,
-      messageId: result.messageId,
-      error: result.error
-    });
-
-  } catch (error) {
-    console.error("Test notification error:", error);
-    res.status(400).json({ error: "Données invalides" });
-  }
-});
-
 // Export provider pour utilisation dans d'autres modules
 export { notificationProvider, type NotificationProvider };
-export const notificationRouter = router;

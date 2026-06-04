@@ -1,6 +1,19 @@
 import { Router } from "express";
 import { db } from "../db";
 import { notificationProvider } from "../services/notificationProvider";
+import {
+    assertCommercialActor,
+    assertHeaderMatchesCommercial,
+    checkClientAvailability,
+    findProfileByName,
+    normalizeClientName,
+    normalizePhone,
+} from "../services/commercialClientService";
+import { insertPrescriptionForUser } from "../services/commercialPrescriptionService";
+import {
+    buildCommercialDashboardStats,
+    listCommercialClients,
+} from "../services/commercialStatsService";
 
 import { verifyRole } from "../middleware/auth";
 
@@ -8,6 +21,25 @@ const router = Router();
 
 // Only Commercials and Administrators can access commercial features
 router.use(verifyRole(["Commercial", "Administrateur"]));
+
+// Vérifier disponibilité nom / téléphone avant inscription
+router.get("/check-client", (req, res) => {
+    const commercialId = req.query.commercialId;
+    const name = String(req.query.name || "");
+    const phone = String(req.query.phone || "");
+    const excludeUserId = req.query.excludeUserId ? Number(req.query.excludeUserId) : undefined;
+
+    if (!commercialId) {
+        return res.status(400).json({ error: "Commercial ID requis" });
+    }
+
+    if (!assertHeaderMatchesCommercial(req.headers["x-user-id"], Number(commercialId))) {
+        return res.status(403).json({ error: "Identité commercial invalide." });
+    }
+
+    const availability = checkClientAvailability(name, phone, excludeUserId);
+    res.json(availability);
+});
 
 // Endpoint for Commercial to register a new client with a mandatory prescription
 router.post("/register-client", async (req, res) => {
@@ -17,25 +49,40 @@ router.post("/register-client", async (req, res) => {
         return res.status(400).json({ error: "Tous les champs sont requis (Commercial ID, Phone, Name, Prescription)" });
     }
 
+    const numericCommercialId = Number(commercialId);
+    if (!Number.isFinite(numericCommercialId)) {
+        return res.status(400).json({ error: "Commercial ID invalide." });
+    }
+
+    if (!assertHeaderMatchesCommercial(req.headers["x-user-id"], numericCommercialId)) {
+        return res.status(403).json({ error: "Identité commercial invalide." });
+    }
+
     try {
-        console.log(`[Commercial] Register attempt by User ID: ${commercialId} for ${clientPhone}`);
-        const commercial = db.prepare("SELECT id_type_compte FROM Utilisateurs WHERE id_utilisateur = ?").get(commercialId) as { id_type_compte: number } | undefined;
-        
-        if (!commercial) {
-            console.warn(`[Commercial] User ${commercialId} not found in DB`);
-            return res.status(403).json({ error: "Accès refusé. Utilisateur non trouvé." });
-        }
-        
-        if (commercial.id_type_compte !== 3) { // 3 is Commercial
-            console.warn(`[Commercial] User ${commercialId} has type ${commercial.id_type_compte}, expected 3`);
-            return res.status(403).json({ error: "Acces refusé. Seul un commercial peut inscrire des clients." });
+        const actor = assertCommercialActor(numericCommercialId);
+        if (!actor.ok) {
+            return res.status(actor.status).json({ error: actor.error });
         }
 
-        const normalizedPhone = clientPhone.replace(/\s+/g, '');
-        const existingUser = db.prepare("SELECT id_utilisateur FROM Utilisateurs WHERE numero_telephone = ?").get(normalizedPhone);
+        const normalizedName = normalizeClientName(String(clientName));
+        const normalizedPhone = normalizePhone(String(clientPhone));
 
-        if (existingUser) {
-            return res.status(409).json({ error: "Ce numéro de téléphone est déjà associé à un compte existant." });
+        if (!normalizedName) {
+            return res.status(400).json({ error: "Le nom du client est requis." });
+        }
+
+        if (!normalizedPhone) {
+            return res.status(400).json({ error: "Le numéro de téléphone est requis." });
+        }
+
+        const availability = checkClientAvailability(normalizedName, normalizedPhone);
+        if (!availability.available) {
+            return res.status(409).json({
+                error: availability.errors[0],
+                errors: availability.errors,
+                nameAvailable: availability.nameAvailable,
+                phoneAvailable: availability.phoneAvailable,
+            });
         }
 
         const generatedPin = Math.floor(100000 + Math.random() * 900000).toString();
@@ -43,135 +90,51 @@ router.post("/register-client", async (req, res) => {
         const updatedAt = new Date().toISOString();
 
         const insertTransaction = db.transaction(() => {
-            // 1. Create User (invalid by default)
             const userStmt = db.prepare(`
                 INSERT INTO Utilisateurs (numero_telephone, pin_hash, pin_expires_at, pin_updated_at, id_type_compte, id_createur, est_valide)
                 VALUES (?, ?, ?, ?, 1, ?, 0)
             `);
-            const userInfo = userStmt.run(normalizedPhone, generatedPin, expiresAt, updatedAt, commercialId);
-            const idUtilisateur = userInfo.lastInsertRowid;
-
-            db.prepare("INSERT INTO ProfilsUtilisateurs (id_utilisateur, nom_complet) VALUES (?, ?)")
-                .run(idUtilisateur, clientName);
-
-            // 2. Create Ordonnance
-            const ordStmt = db.prepare(`
-                INSERT INTO Ordonnances (id_utilisateur, titre, nom_patient, poids_patient, categorie_age, date_ordonnance, date_debut) 
-                VALUES (?, ?, ?, ?, ?, CURRENT_DATE, ?)
-            `);
-            const ordInfo = ordStmt.run(
-                idUtilisateur, 
-                prescription.title || "Ordonnance initiale", 
-                clientName, 
-                prescription.weight || 0, 
-                prescription.categorieAge || 'adulte',
-                startDate || null
+            const userInfo = userStmt.run(
+                normalizedPhone,
+                generatedPin,
+                expiresAt,
+                updatedAt,
+                numericCommercialId,
             );
-            const idOrdonnance = ordInfo.lastInsertRowid;
+            const idUtilisateur = userInfo.lastInsertRowid as number;
 
-            // 3. Iterate each Medication
-            for (const m of prescription.medications) {
-                let medRecord = db.prepare("SELECT id_medicament FROM Medicaments WHERE LOWER(nom) = LOWER(?)").get(m.name) as { id_medicament: number } | undefined;
+            db.prepare("INSERT INTO ProfilsUtilisateurs (id_utilisateur, nom_complet) VALUES (?, ?)").run(
+                idUtilisateur,
+                normalizedName,
+            );
 
-                let idMedicament;
-                if (!medRecord) {
-                    const mStmt = db.prepare("INSERT INTO Medicaments (nom) VALUES (?)");
-                    const mInfo = mStmt.run(m.name);
-                    idMedicament = mInfo.lastInsertRowid;
-                } else {
-                    idMedicament = medRecord.id_medicament;
-                }
+            insertPrescriptionForUser(
+                idUtilisateur,
+                normalizedName,
+                prescription,
+                startDate,
+            );
 
-                // Find or insert unit ID
-                let unitId = 5; // Default to 'unité'
-                if (m.unit) {
-                    const uRecord = db.prepare("SELECT id_unite FROM Unites WHERE LOWER(nom_unite) = LOWER(?)").get(m.unit) as { id_unite: number } | undefined;
-                    if (uRecord) {
-                        unitId = uRecord.id_unite;
-                    } else {
-                        try {
-                            const uInfo = db.prepare("INSERT INTO Unites (nom_unite) VALUES (?)").run(m.unit);
-                            unitId = uInfo.lastInsertRowid as number;
-                        } catch (e) {
-                            const uRecordRetry = db.prepare("SELECT id_unite FROM Unites WHERE LOWER(nom_unite) = LOWER(?)").get(m.unit) as { id_unite: number } | undefined;
-                            if (uRecordRetry) unitId = uRecordRetry.id_unite;
-                        }
-                    }
-                }
-
-                const allowedFrequencies = ['matin', 'midi', 'soir'];
-                const dbFrequence = allowedFrequencies.includes(m.frequencyType) ? m.frequencyType : 'personnalise';
-
-                const eoStmt = db.prepare(`
-                    INSERT INTO ElementsOrdonnance (id_ordonnance, id_medicament, type_frequence, intervalle_heures, duree_jours, dose_personnalisee, id_unite_personnalisee)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                `);
-
-                const eoInfo = eoStmt.run(
-                    idOrdonnance,
-                    idMedicament,
-                    dbFrequence,
-                    m.intervalHours || null,
-                    m.durationDays,
-                    m.doseValue,
-                    unitId
-                );
-                const idElement = eoInfo.lastInsertRowid;
-
-                // 4. Generate CalendrierPrises Schedule
-                if (m.frequencyType !== 'prn') {
-                    const pStmt = db.prepare(`
-                        INSERT INTO CalendrierPrises (id_element_ordonnance, heure_prevue, dose, id_unite, statut_prise)
-                        VALUES (?, ?, ?, ?, 0)
-                    `);
-
-                    let baseDate: Date;
-                    if (startDate && typeof startDate === 'string') {
-                        const [y, mm, dd] = startDate.split('-').map(Number);
-                        baseDate = new Date(y, mm - 1, dd, 12, 0, 0);
-                    } else {
-                        baseDate = new Date();
-                        baseDate.setHours(12, 0, 0, 0);
-                    }
-
-                    for (let dayOffset = 0; dayOffset < (m.durationDays || 1); dayOffset++) {
-                        const currentDate = new Date(baseDate);
-                        currentDate.setDate(baseDate.getDate() + dayOffset);
-
-                        if (m.frequencyType === 'interval' && m.intervalHours) {
-                            let currHour = 0;
-                            while (currHour < 24) {
-                                const d = new Date(currentDate);
-                                d.setHours(currHour, 0, 0, 0);
-                                pStmt.run(idElement, d.toISOString(), m.doseValue, unitId);
-                                currHour += m.intervalHours;
-                            }
-                        } else if (m.times && m.times.length > 0) {
-                            for (const timeStr of m.times) {
-                                const [h, min] = timeStr.split(':').map(Number);
-                                const d = new Date(currentDate);
-                                d.setHours(h, min, 0, 0);
-                                pStmt.run(idElement, d.toISOString(), m.doseValue, unitId);
-                            }
-                        }
-                    }
-                }
-            }
             return idUtilisateur;
         });
 
         const newUserId = insertTransaction();
 
-        // Send PIN to Client
-        await notificationProvider.sendSMS(
-            normalizedPhone,
-            `Bienvenue sur TAKYMED ! Pour valider votre inscription faite par votre agent, donnez-lui ce code PIN : ${generatedPin}`
-        ).catch(err => console.error("SMS Warning:", err));
+        await notificationProvider
+            .sendSMS(
+                normalizedPhone,
+                `Bienvenue sur TAKYMED ! Pour valider votre inscription faite par votre agent, donnez-lui ce code PIN : ${generatedPin}`,
+            )
+            .catch((err) => console.error("SMS Warning:", err));
 
         res.status(201).json({ success: true, clientId: newUserId });
     } catch (error) {
         console.error("Commercial register-client error:", error);
-        res.status(500).json({ error: "Internal server error", details: error instanceof Error ? error.message : "Erreur inconnue" });
+        const message = error instanceof Error ? error.message : "Erreur inconnue";
+        if (message.includes("médicament")) {
+            return res.status(400).json({ error: message });
+        }
+        res.status(500).json({ error: "Internal server error", details: message });
     }
 });
 
@@ -228,12 +191,24 @@ router.post("/add-prescription", async (req, res) => {
 router.post("/validate-client", async (req, res) => {
     const { commercialId, clientPhone, pin } = req.body;
 
+    if (!commercialId || !clientPhone || !pin) {
+        return res.status(400).json({ error: "Commercial ID, téléphone et PIN requis." });
+    }
+
+    const numericCommercialId = Number(commercialId);
+    if (!assertHeaderMatchesCommercial(req.headers["x-user-id"], numericCommercialId)) {
+        return res.status(403).json({ error: "Identité commercial invalide." });
+    }
+
     try {
+        const normalizedPhone = normalizePhone(String(clientPhone));
+        const normalizedPin = String(pin).trim();
+
         const user = db.prepare(`
             SELECT id_utilisateur, pin_hash, est_valide 
             FROM Utilisateurs 
             WHERE numero_telephone = ? AND id_createur = ?
-        `).get(clientPhone, commercialId) as { id_utilisateur: number; pin_hash: string; est_valide: number } | undefined;
+        `).get(normalizedPhone, numericCommercialId) as { id_utilisateur: number; pin_hash: string; est_valide: number } | undefined;
 
         if (!user) {
             return res.status(404).json({ error: "Client non trouvé ou non créé par vous." });
@@ -243,7 +218,7 @@ router.post("/validate-client", async (req, res) => {
             return res.status(400).json({ error: "Ce client est déjà validé." });
         }
 
-        if (user.pin_hash !== pin) {
+        if (user.pin_hash !== normalizedPin) {
             return res.status(401).json({ error: "Code PIN incorrect." });
         }
 
@@ -256,27 +231,44 @@ router.post("/validate-client", async (req, res) => {
     }
 });
 
+// Aggregated stats for commercial dashboard (computed server-side)
+router.get("/stats", (req, res) => {
+    const commercialId = req.query.commercialId;
+    if (!commercialId) return res.status(400).json({ error: "Commercial ID requis" });
+
+    const numericCommercialId = Number(commercialId);
+    if (!Number.isFinite(numericCommercialId)) {
+        return res.status(400).json({ error: "Commercial ID invalide" });
+    }
+
+    if (!assertHeaderMatchesCommercial(req.headers["x-user-id"], numericCommercialId)) {
+        return res.status(403).json({ error: "Identité commercial invalide." });
+    }
+
+    try {
+        res.json(buildCommercialDashboardStats(numericCommercialId));
+    } catch (error) {
+        console.error("Commercial stats error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
 // List clients for a commercial user with prescription and reminder counts
 router.get("/clients", (req, res) => {
     const commercialId = req.query.commercialId;
     if (!commercialId) return res.status(400).json({ error: "Commercial ID requis" });
 
-    try {
-        const clients = db.prepare(`
-            SELECT u.id_utilisateur as id, u.numero_telephone as phone, p.nom_complet as name, 
-                   u.est_valide as isValid, u.cree_le as createdAt,
-                   (SELECT COUNT(*) FROM Ordonnances WHERE id_utilisateur = u.id_utilisateur) as prescriptionCount,
-                   (SELECT COUNT(cp.id_calendrier_prise) FROM CalendrierPrises cp 
-                    JOIN ElementsOrdonnance eo ON cp.id_element_ordonnance = eo.id_element_ordonnance
-                    JOIN Ordonnances o ON eo.id_ordonnance = o.id_ordonnance
-                    WHERE o.id_utilisateur = u.id_utilisateur) as reminderCount
-            FROM Utilisateurs u
-            JOIN ProfilsUtilisateurs p ON u.id_utilisateur = p.id_utilisateur
-            WHERE u.id_createur = ?
-            ORDER BY u.cree_le DESC
-        `).all(commercialId);
+    const numericCommercialId = Number(commercialId);
+    if (!Number.isFinite(numericCommercialId)) {
+        return res.status(400).json({ error: "Commercial ID invalide" });
+    }
 
-        res.json({ clients });
+    if (!assertHeaderMatchesCommercial(req.headers["x-user-id"], numericCommercialId)) {
+        return res.status(403).json({ error: "Identité commercial invalide." });
+    }
+
+    try {
+        res.json({ clients: listCommercialClients(numericCommercialId) });
     } catch (error) {
         console.error("Commercial get-clients error:", error);
         res.status(500).json({ error: "Internal server error" });
@@ -292,17 +284,40 @@ router.patch("/clients/:id", (req, res) => {
         return res.status(400).json({ error: "Commercial ID et nom requis" });
     }
 
+    const numericCommercialId = Number(commercialId);
+    const normalizedName = normalizeClientName(String(name));
+
+    if (!normalizedName) {
+        return res.status(400).json({ error: "Le nom du client est requis." });
+    }
+
+    if (!assertHeaderMatchesCommercial(req.headers["x-user-id"], numericCommercialId)) {
+        return res.status(403).json({ error: "Identité commercial invalide." });
+    }
+
     try {
+        const existing = findProfileByName(normalizedName, Number(id));
+        if (existing) {
+            return res.status(409).json({ error: "Un client avec ce nom existe déjà dans la base de données." });
+        }
+
         const result = db.prepare(`
             UPDATE ProfilsUtilisateurs 
             SET nom_complet = ? 
             WHERE id_utilisateur = ? 
             AND id_utilisateur IN (SELECT id_utilisateur FROM Utilisateurs WHERE id_createur = ?)
-        `).run(name, id, commercialId);
+        `).run(normalizedName, id, numericCommercialId);
 
         if (result.changes === 0) {
             return res.status(404).json({ error: "Client non trouvé ou non autorisé." });
         }
+
+        db.prepare(`
+            UPDATE Ordonnances
+            SET nom_patient = ?
+            WHERE id_utilisateur = ?
+        `).run(normalizedName, id);
+
         res.json({ success: true, message: "Nom du client mis à jour." });
     } catch (error) {
         console.error("Commercial update-client error:", error);
