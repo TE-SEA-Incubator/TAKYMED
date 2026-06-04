@@ -55,13 +55,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 16),
-                    const Center(
-                      child: TakymedLogo(
-                        size: TakymedLogoSize.large,
-                        showLabel: true,
-                        circularBackground: true,
-                      ),
-                    ).animate().fadeIn().scale(begin: const Offset(0.9, 0.9)),
+                    Center(
+                      child: const Hero(
+                        tag: 'takymed_logo',
+                        child: TakymedLogo(
+                          size: TakymedLogoSize.hero,
+                          circularBackground: true,
+                        ),
+                      ).animate().scale(
+                            begin: const Offset(0.8, 0.8),
+                            duration: 600.ms,
+                            curve: Curves.elasticOut,
+                          ),
+                    ),
                     const SizedBox(height: 20),
                     Text(
                       'Créer un compte',
