@@ -57,6 +57,12 @@ const medicationSchema = z.object({
 });
 
 import { verifyRole } from "../middleware/auth";
+import {
+    isDefaultAdminUserId,
+    PROTECTED_ADMIN_DELETE_ERROR,
+    PROTECTED_ADMIN_PHONE_ERROR,
+    PROTECTED_ADMIN_TYPE_ERROR,
+} from "../utils/protectedAdmin";
 
 // Middleware to check if user is admin
 router.use(verifyRole(["Administrateur"]));
@@ -206,8 +212,14 @@ router.get("/users", (_req, res) => {
             JOIN TypesComptes tc ON u.id_type_compte = tc.id_type_compte
             LEFT JOIN ProfilsUtilisateurs p ON u.id_utilisateur = p.id_utilisateur
             ORDER BY u.id_utilisateur DESC
-        `).all();
-        res.json({ users });
+        `).all() as { id: number; email: string; phone: string; type: string; name: string; pin?: string; pinExpiresAt?: string; pinUpdatedAt?: string }[];
+
+        res.json({
+            users: users.map((u) => ({
+                ...u,
+                protected: isDefaultAdminUserId(u.id),
+            })),
+        });
     } catch (error) {
         res.status(500).json({ error: "Failed to fetch users" });
     }
@@ -217,6 +229,11 @@ router.get("/users", (_req, res) => {
 router.put("/users/:id", (req, res) => {
     const { id } = req.params;
     const { id_type_compte } = req.body;
+
+    if (isDefaultAdminUserId(id)) {
+        return res.status(403).json({ error: PROTECTED_ADMIN_TYPE_ERROR });
+    }
+
     try {
         db.prepare("UPDATE Utilisateurs SET id_type_compte = ? WHERE id_utilisateur = ?").run(id_type_compte, id);
         res.json({ success: true });
@@ -228,8 +245,12 @@ router.put("/users/:id", (req, res) => {
 // Delete user
 router.delete("/users/:id", (req, res) => {
     const { id } = req.params;
+
+    if (isDefaultAdminUserId(id)) {
+        return res.status(403).json({ error: PROTECTED_ADMIN_DELETE_ERROR });
+    }
+
     try {
-        // Simple delete - in real app would handle cascades or soft delete
         db.prepare("DELETE FROM Utilisateurs WHERE id_utilisateur = ?").run(id);
         res.json({ success: true });
     } catch (error) {
@@ -628,6 +649,10 @@ router.patch("/users/:id", (req, res) => {
         const user = db.prepare("SELECT id_utilisateur FROM Utilisateurs WHERE id_utilisateur = ?").get(id);
         if (!user) {
             return res.status(404).json({ error: "User not found" });
+        }
+
+        if (phone && isDefaultAdminUserId(id)) {
+            return res.status(403).json({ error: PROTECTED_ADMIN_PHONE_ERROR });
         }
 
         if (phone) {

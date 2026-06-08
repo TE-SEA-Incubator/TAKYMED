@@ -30,7 +30,7 @@ export function PageHeader({
 
       <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-start gap-4 md:items-center md:gap-5">
-          {showLogo && <Logo size="small" badge className="hidden shrink-0 sm:block" />}
+          {showLogo && <Logo size="small" className="hidden shrink-0 sm:block" />}
           <div className="min-w-0 space-y-2">
             {badge && (
               <span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-primary">

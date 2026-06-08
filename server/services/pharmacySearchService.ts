@@ -1,6 +1,7 @@
 import { db } from "../db";
 import {
   detectNearestCity,
+  pharmacyMatchesCity,
   sortByDistance,
   type Coordinates,
 } from "../utils/geo";
@@ -154,9 +155,13 @@ export function searchNearbyPharmacies(options: {
 
   if (hasLocation) {
     const coords: Coordinates = { lat: options.lat!, lng: options.lng! };
+    const city = detectNearestCity(coords.lat, coords.lng);
+    allNearby = allNearby.filter((p) => pharmacyMatchesCity(p, city));
     withStock = sortByDistance(withStock, coords.lat, coords.lng, radiusKm).slice(0, limit);
     onDuty = sortByDistance(onDuty, coords.lat, coords.lng, radiusKm).slice(0, limit);
-    allNearby = sortByDistance(allNearby, coords.lat, coords.lng, radiusKm).slice(0, limit);
+    allNearby = sortByDistance(allNearby, coords.lat, coords.lng, radiusKm);
+    // Liste complète de la ville, triée de la plus proche à la plus lointaine
+    allNearby = allNearby.slice(0, Math.max(limit, 80));
   } else {
     withStock = withStock.slice(0, limit);
     onDuty = onDuty.slice(0, limit);

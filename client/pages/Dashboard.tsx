@@ -14,7 +14,6 @@ import {
   Store,
   ArrowRight,
   Loader2,
-  Crown,
   Check,
   Shield,
   ChevronRight,
@@ -166,7 +165,7 @@ export default function Dashboard() {
         <div className="bg-white p-6 md:p-10 rounded-[2.5rem] border shadow-2xl mb-8 md:mb-12 flex flex-col md:flex-row justify-between items-center gap-6 md:gap-10 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[80px] -mr-32 -mt-32" />
           <div className="flex items-center gap-5 md:gap-8 relative z-10 w-full">
-            <Logo size="small" badge className="hidden sm:block shrink-0" />
+            <Logo size="small" className="hidden sm:block shrink-0" />
             <div className="flex-1">
               <div className="flex items-center gap-3">
                 <h1 className="text-4xl font-black tracking-tighter mb-1">
@@ -241,25 +240,34 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
           {(user.type as string) === "standard" ? (
-            <div className="col-span-full hidden md:block bg-white rounded-3xl p-8 border shadow-sm text-center space-y-4">
-              <Crown className="w-12 h-12 text-primary mx-auto" />
-              <h3 className="text-xl font-bold">
-                {t("dashboard.upgradeTitle")}
-              </h3>
-              <p className="text-muted-foreground max-w-md mx-auto">
-                {t("dashboard.upgradeDesc")}
-              </p>
-              <Link to="/upgrade">
-                <Button
-                  variant="outline"
-                  className="rounded-xl font-bold border-primary text-primary hover:bg-primary/5"
-                >
-                  {t("dashboard.upgradeBtn")}
-                </Button>
-              </Link>
-            </div>
+            <>
+              <div className="bg-white rounded-3xl p-5 border shadow-sm">
+                <p className="text-[10px] uppercase font-bold text-muted-foreground">
+                  {t("dashboard.adherence")}
+                </p>
+                <p className="text-2xl font-black">
+                  {stats ? `${stats.observanceRate}%` : "0%"}
+                </p>
+              </div>
+              <div className="bg-white rounded-3xl p-5 border shadow-sm">
+                <p className="text-[10px] uppercase font-bold text-muted-foreground">
+                  {t("dashboard.plannedDoses")}
+                </p>
+                <p className="text-2xl font-black">
+                  {stats ? stats.plannedReminders : 0}
+                </p>
+              </div>
+              <div className="bg-white rounded-3xl p-5 border shadow-sm col-span-2 lg:col-span-1">
+                <p className="text-[10px] uppercase font-bold text-muted-foreground">
+                  {t("dashboard.toTake")}
+                </p>
+                <p className="text-2xl font-black">
+                  {stats ? stats.activeReminders : 0}
+                </p>
+              </div>
+            </>
           ) : (
             <>
               <div className="bg-white rounded-3xl p-5 border shadow-sm">
@@ -292,6 +300,22 @@ export default function Dashboard() {
                 </p>
                 <p className="text-2xl font-black">
                   {stats ? stats.nearbyPharmacies : 0}
+                </p>
+              </div>
+              <div className="bg-white rounded-3xl p-5 border shadow-sm">
+                <p className="text-[10px] uppercase font-bold text-muted-foreground">
+                  {t("dashboard.overdueReminders")}
+                </p>
+                <p className="text-2xl font-black">
+                  {stats ? stats.overdueReminders ?? 0 : 0}
+                </p>
+              </div>
+              <div className="bg-white rounded-3xl p-5 border shadow-sm">
+                <p className="text-[10px] uppercase font-bold text-muted-foreground">
+                  {t("dashboard.pharmaciesOnDuty")}
+                </p>
+                <p className="text-2xl font-black">
+                  {stats ? stats.pharmaciesOnDuty ?? 0 : 0}
                 </p>
               </div>
             </>
@@ -411,7 +435,7 @@ export default function Dashboard() {
                         subtext="Sur les doses échues"
                       />
                       <DashboardStat
-                        label={t("dashboard.activeReminders")}
+                        label={t("dashboard.toTake")}
                         value={stats ? stats.activeReminders.toString() : "0"}
                         subtext={`Sur ${stats ? stats.plannedReminders : 0} planifiés`}
                       />
@@ -419,6 +443,16 @@ export default function Dashboard() {
                         label={t("dashboard.nearbyPharmacies")}
                         value={stats ? stats.nearbyPharmacies.toString() : "0"}
                         subtext="Avec stock disponible"
+                      />
+                      <DashboardStat
+                        label={t("dashboard.overdueReminders")}
+                        value={stats ? String(stats.overdueReminders ?? 0) : "0"}
+                        subtext="Prises en retard"
+                      />
+                      <DashboardStat
+                        label={t("dashboard.pharmaciesOnDuty")}
+                        value={stats ? String(stats.pharmaciesOnDuty ?? 0) : "0"}
+                        subtext="Pharmacies de garde"
                       />
                     </div>
                   )}

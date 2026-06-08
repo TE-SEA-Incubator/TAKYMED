@@ -21,6 +21,13 @@ if (!fs.existsSync(spaDir)) {
   process.exit(1);
 }
 
+const htaccess = path.join(spaDir, ".htaccess");
+if (!fs.existsSync(htaccess)) {
+  console.warn("⚠️  .htaccess absent de dist/spa — routing SPA IONOS peut échouer");
+} else {
+  console.log("✓ .htaccess inclus (routing SPA pour IONOS)");
+}
+
 if (fs.existsSync(zipPath)) {
   fs.unlinkSync(zipPath);
 }

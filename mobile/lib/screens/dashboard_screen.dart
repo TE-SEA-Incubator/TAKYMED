@@ -95,6 +95,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     final authProvider = Provider.of<AuthProvider>(context);
     final userName = authProvider.user?.name ?? 'Utilisateur';
     final isCommercial = authProvider.user?.type == 'commercial';
+    final isStandard = authProvider.user?.type == 'standard';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -179,7 +180,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                                     ),
                                     const SizedBox(width: 12),
                                     StatCard(
-                                      label: 'À prendre',
+                                      label: 'Rappel',
                                       value: '${_data!['stats']['activeReminders']}',
                                       icon: Icons.notifications_active_rounded,
                                       color: AppColors.warning,
@@ -193,31 +194,33 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    StatCard(
-                                      label: 'Partenaires',
-                                      value: '${_data!['stats']['nearbyPharmacies'] ?? 0}',
-                                      icon: Icons.local_pharmacy_rounded,
-                                      color: AppColors.secondary,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    StatCard(
-                                      label: 'En retard',
-                                      value: '${_data!['stats']['overdueReminders'] ?? 0}',
-                                      icon: Icons.warning_amber_rounded,
-                                      color: AppColors.destructive,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    StatCard(
-                                      label: 'De garde',
-                                      value: '${_data!['stats']['pharmaciesOnDuty'] ?? 0}',
-                                      icon: Icons.nightlight_round,
-                                      color: const Color(0xFF6366F1),
-                                    ),
-                                  ],
-                                ),
+                                if (!isStandard) ...[
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      StatCard(
+                                        label: 'Pharmacie',
+                                        value: '${_data!['stats']['nearbyPharmacies'] ?? 0}',
+                                        icon: Icons.local_pharmacy_rounded,
+                                        color: AppColors.secondary,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      StatCard(
+                                        label: 'En retard',
+                                        value: '${_data!['stats']['overdueReminders'] ?? 0}',
+                                        icon: Icons.warning_amber_rounded,
+                                        color: AppColors.destructive,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      StatCard(
+                                        label: 'De garde',
+                                        value: '${_data!['stats']['pharmaciesOnDuty'] ?? 0}',
+                                        icon: Icons.nightlight_round,
+                                        color: const Color(0xFF6366F1),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ],
                             ),
                           ),

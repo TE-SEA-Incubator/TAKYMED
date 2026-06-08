@@ -1,31 +1,8 @@
 import { db } from "../db";
 import { getUserAccountContext } from "./prescriptionAccessService";
+import { normalizePhone } from "../utils/phone";
 
-export function normalizePhone(phone: string): string {
-  let p = phone.replace(/[\s\-().]/g, "").trim();
-  if (!p) return "";
-
-  // Corrige les doubles préfixes (+237+237..., 237237...)
-  while (p.startsWith("+237+237")) {
-    p = "+237" + p.slice(8);
-  }
-  if (p.startsWith("237237")) {
-    p = "+237" + p.slice(6);
-  }
-
-  if (/^\+2376\d{8}$/.test(p)) return p;
-
-  if (p.startsWith("2376") && !p.startsWith("+")) {
-    p = "+237" + p.slice(3);
-  }
-
-  const local = p.replace(/^\+237/, "").replace(/^0/, "");
-  if (/^6\d{8}$/.test(local)) {
-    return "+237" + local;
-  }
-
-  return p;
-}
+export { normalizePhone };
 
 export function findCommercialClientForValidation(
   commercialId: number,

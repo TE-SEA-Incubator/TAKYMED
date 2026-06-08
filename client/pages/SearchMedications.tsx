@@ -12,13 +12,11 @@ import {
   Plus,
   Bookmark,
   ChevronRight,
-  MapPin,
   Navigation,
   Store,
-  CheckCircle2,
-  Clock
+  Phone,
 } from "lucide-react";
-import { cn, resolveMedicationPhotoUrl } from "@/lib/utils";
+import { cn, resolveMedicationPhotoUrl, formatPharmacyDistanceShort, pharmacyShortLocation } from "@/lib/utils";
 import { toast } from "sonner";
 import { PageShell } from "@/components/app/PageShell";
 import { PageHeader } from "@/components/app/PageHeader";
@@ -30,9 +28,9 @@ export default function SearchMedications() {
   const [medications, setMedications] = useState<any[]>([]);
   const [interactions, setInteractions] = useState<any[]>([]);
   const [selectedMed, setSelectedMed] = useState<any | null>(null);
-  const [pharmaciesWithStock, setPharmaciesWithStock] = useState<any[]>([]);
+  const [pharmaciesNearby, setPharmaciesNearby] = useState<any[]>([]);
   const [pharmaciesOnDuty, setPharmaciesOnDuty] = useState<any[]>([]);
-  const [pharmacyTab, setPharmacyTab] = useState<"stock" | "garde">("garde");
+  const [pharmacyTab, setPharmacyTab] = useState<"pharmacy" | "garde">("garde");
   const [mainSection, setMainSection] = useState<"medications" | "pharmacies">("medications");
   const [pharmacyQuery, setPharmacyQuery] = useState("");
   const [loadingPharmacies, setLoadingPharmacies] = useState(false);
@@ -104,6 +102,13 @@ export default function SearchMedications() {
     return () => clearTimeout(timer);
   }, [query]);
 
+  // Auto-trigger AI search when no meds found
+  useEffect(() => {
+    if (!loading && medications.length === 0 && query.trim() && !aiResult) {
+      // Initiate AI search silently
+      searchWithAI();
+    }
+  }, [loading, medications, query]);
   const searchWithAI = async () => {
     const q = query.trim();
     if (q.length < 2) return;
@@ -128,15 +133,15 @@ export default function SearchMedications() {
   };
 
   const normalizeNearbyPharmacies = (data: any) => {
-    if (data.withStock || data.onDuty) {
+    if (data.allNearby || data.onDuty) {
       return {
-        withStock: data.withStock ?? [],
+        allNearby: data.allNearby ?? [],
         onDuty: data.onDuty ?? [],
         city: data.location?.city ?? null,
       };
     }
     return {
-      withStock: data.pharmacies ?? [],
+      allNearby: data.pharmacies ?? [],
       onDuty: [],
       city: data.resolvedLocation?.city ?? null,
     };
@@ -151,15 +156,11 @@ export default function SearchMedications() {
     : [];
 
   // Fetch pharmacies (garde + stock) when on pharmacy section
-  const fetchNearbyPharmacies = async (medId?: number) => {
+  const fetchNearbyPharmacies = async () => {
     setLoadingPharmacies(true);
-    let url = `/api/pharmacies/nearby?limit=40`;
+    let url = `/api/pharmacies/nearby?limit=80`;
     if (userLocation) {
       url += `&lat=${userLocation.lat}&lng=${userLocation.lng}`;
-    }
-    const effectiveMedId = medId ?? selectedMed?.id;
-    if (effectiveMedId) {
-      url += `&medId=${effectiveMedId}`;
     }
 
     try {
@@ -167,7 +168,7 @@ export default function SearchMedications() {
       if (res.ok) {
         const data = await res.json();
         const normalized = normalizeNearbyPharmacies(data);
-        setPharmaciesWithStock(normalized.withStock);
+        setPharmaciesNearby(normalized.allNearby);
         setPharmaciesOnDuty(normalized.onDuty);
         setLocationCity(normalized.city);
       } else if (res.headers.get("content-type")?.includes("application/json")) {
@@ -181,10 +182,44 @@ export default function SearchMedications() {
     }
   };
 
+  const handleGetLocation = (silent = false) => {
+    setIsFindingLocation(true);
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
+          setUserLocation(coords);
+          setIsFindingLocation(false);
+          if (!silent) toast.success("Position récupérée !");
+          if (mainSection === "pharmacies") {
+            fetchNearbyPharmacies();
+          }
+        },
+        (error) => {
+          console.warn("Geolocation error:", error.message);
+          setIsFindingLocation(false);
+          if (silent) return;
+          if (error.code === 1) {
+            toast.warning("Géolocalisation non disponible - utilisez localhost ou HTTPS");
+          } else {
+            toast.error("Impossible de récupérer votre position.");
+          }
+        }
+      );
+    } else {
+      setIsFindingLocation(false);
+      if (!silent) toast.error("Géolocalisation non supportée par votre navigateur.");
+    }
+  };
+
   useEffect(() => {
     if (mainSection !== "pharmacies") return;
+    if (!userLocation && !isFindingLocation) {
+      handleGetLocation(true);
+      return;
+    }
     fetchNearbyPharmacies();
-  }, [mainSection, userLocation, selectedMed?.id]);
+  }, [mainSection, userLocation, pharmacyTab]);
 
   const filterPharmacies = (list: any[]) => {
     const q = pharmacyQuery.trim().toLowerCase();
@@ -196,98 +231,71 @@ export default function SearchMedications() {
     );
   };
 
-  const openPharmaciesSection = (stockTab = false) => {
+  const openPharmaciesSection = (pharmacyListTab = false) => {
     setMainSection("pharmacies");
-    setPharmacyTab(stockTab ? "stock" : "garde");
-  };
-
-  const handleGetLocation = () => {
-    setIsFindingLocation(true);
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
-          setUserLocation(coords);
-          setIsFindingLocation(false);
-          toast.success("Position récupérée !");
-          if (mainSection === "pharmacies") {
-            fetchNearbyPharmacies();
-          }
-        },
-        (error) => {
-          console.warn("Geolocation error:", error.message);
-          setIsFindingLocation(false);
-          if (error.code === 1) {
-            toast.warning("Géolocalisation non disponible - utilisez localhost ou HTTPS");
-          } else {
-            toast.error("Impossible de récupérer votre position.");
-          }
-        }
-      );
-    } else {
-      setIsFindingLocation(false);
-      toast.error("Géolocalisation non supportée par votre navigateur.");
-    }
+    setPharmacyTab(pharmacyListTab ? "pharmacy" : "garde");
   };
 
   const pharmacyList = filterPharmacies(
-    pharmacyTab === "stock" ? pharmaciesWithStock : pharmaciesOnDuty,
+    pharmacyTab === "pharmacy" ? pharmaciesNearby : pharmaciesOnDuty,
   );
 
-  const renderPharmacyCard = (p: any, isGarde: boolean) => (
-    <div
-      key={p.id}
-      className={cn(
-        "p-6 rounded-3xl border space-y-4 hover:border-primary/50 transition-all",
-        isGarde ? "border-amber-100 bg-amber-50/50" : "border-slate-100 bg-slate-50",
-      )}
-    >
-      <div className="flex justify-between items-start gap-2">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            {isGarde && (
-              <span className="text-[10px] font-black uppercase bg-amber-500 text-white px-2 py-0.5 rounded-md">
-                De garde
-              </span>
-            )}
-            <h4 className="font-bold text-lg">{p.name}</h4>
-          </div>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <MapPin className="w-3 h-3 shrink-0" />
-            {p.address}
-          </div>
+  const renderGardeRow = (p: any, index: number) => {
+    const phone = String(p.phone ?? "").replace(/\s+/g, "");
+    return (
+      <button
+        key={p.id}
+        type="button"
+        onClick={() => phone && (window.location.href = `tel:${phone}`)}
+        className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3 text-left transition-colors hover:border-amber-200 hover:bg-amber-50/40"
+      >
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-[11px] font-black leading-tight text-amber-600">
+          {p.distance != null ? formatPharmacyDistanceShort(p.distance) : index + 1}
         </div>
-        {p.distance != null && (
-          <div className="bg-white px-2 py-1 rounded-lg border text-[10px] font-bold text-primary shrink-0">
-            {p.distance} km
-          </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-bold text-foreground">{p.name}</p>
+          <p className="truncate text-xs text-muted-foreground">{pharmacyShortLocation(p)}</p>
+        </div>
+        {phone && (
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Phone className="h-4 w-4" />
+          </span>
         )}
-      </div>
-      <div className="flex items-center justify-between pt-2">
-        {!isGarde ? (
-          <div className="flex items-center gap-1 text-green-600 font-bold text-xs">
-            <CheckCircle2 className="w-4 h-4" />
-            En stock ({p.quantity} unités)
-          </div>
-        ) : (
-          <div className="flex items-center gap-1 text-amber-600 font-bold text-xs">
-            <Clock className="w-4 h-4" />
-            {p.status || "Ouverte"}
-          </div>
+      </button>
+    );
+  };
+
+  const renderPharmacyRow = (p: any, index: number) => {
+    const phone = String(p.phone ?? "").replace(/\s+/g, "");
+    return (
+      <button
+        key={p.id}
+        type="button"
+        onClick={() => phone && (window.location.href = `tel:${phone}`)}
+        className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3 text-left transition-colors hover:border-primary/30 hover:bg-primary/5"
+      >
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-[11px] font-black leading-tight text-primary">
+          {p.distance != null ? formatPharmacyDistanceShort(p.distance) : index + 1}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-bold text-foreground">{p.name}</p>
+          <p className="truncate text-xs text-muted-foreground">{pharmacyShortLocation(p)}</p>
+        </div>
+        {phone && (
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Phone className="h-4 w-4" />
+          </span>
         )}
-        <Button asChild variant="ghost" className="h-8 rounded-xl text-xs font-bold gap-2">
-          <a href={`tel:${p.phone?.replace(/\s+/g, "")}`}>{p.phone || "Appeler"}</a>
-        </Button>
-      </div>
-    </div>
-  );
+      </button>
+    );
+  };
 
   return (
     <PageShell maxWidth="2xl">
       <PageHeader
         badge="Recherche"
         title={t("search.title")}
-        subtitle="Médicaments, stocks et pharmacies de garde près de chez vous."
+        subtitle="Médicaments et pharmacies près de chez vous."
       />
 
       {/* Section principale : Médicaments | Pharmacies */}
@@ -381,15 +389,7 @@ export default function SearchMedications() {
                 {query && medications.length === 0 && !loading && (
                   <div className="space-y-4 py-4">
                     <p className="text-center text-muted-foreground">Aucun médicament trouvé.</p>
-                    {!aiResult && (
-                      <Button
-                        onClick={searchWithAI}
-                        disabled={aiLoading}
-                        className="h-12 w-full rounded-2xl bg-violet-600 font-bold hover:bg-violet-700"
-                      >
-                        {aiLoading ? "Recherche IA..." : "Rechercher avec l'IA"}
-                      </Button>
-                    )}
+                    {aiLoading && <p className="text-center text-muted-foreground">Recherche IA...</p>}
                     {aiResult && (
                       <div className="space-y-3 rounded-3xl border border-violet-100 bg-violet-50 p-6 text-left">
                         <div className="inline-flex items-center rounded-full bg-violet-100 px-3 py-1 text-xs font-bold uppercase text-violet-700">
@@ -481,7 +481,7 @@ export default function SearchMedications() {
                       onClick={() => openPharmaciesSection(true)}
                     >
                       <Store className="mr-2 h-4 w-4" />
-                      Voir disponibilité en pharmacie
+                      Voir les pharmacies proches
                     </Button>
                   </div>
                 </>
@@ -496,36 +496,7 @@ export default function SearchMedications() {
           </div>
         </div>
       ) : (
-        <div className="space-y-6">
-          <div className="flex flex-col gap-4 md:flex-row">
-            <Button
-              onClick={handleGetLocation}
-              disabled={isFindingLocation}
-              variant="outline"
-              className="h-14 flex-1 rounded-2xl border-primary/20 font-bold text-primary hover:bg-primary/5"
-            >
-              <Navigation className={cn("mr-2 h-5 w-5", isFindingLocation && "animate-spin")} />
-              {userLocation
-                ? `Ma position${locationCity ? ` · ${locationCity}` : ""}`
-                : "Utiliser ma position"}
-            </Button>
-            <div className="relative flex flex-[2] items-center rounded-2xl border bg-white p-2 shadow-sm">
-              <Search className="ml-3 h-5 w-5 text-muted-foreground" />
-              <Input
-                value={pharmacyQuery}
-                onChange={(e) => setPharmacyQuery(e.target.value)}
-                placeholder="Filtrer par nom ou adresse…"
-                className="h-12 border-none bg-transparent focus-visible:ring-0"
-              />
-            </div>
-          </div>
-
-          {selectedMed && (
-            <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm font-semibold text-primary">
-              Stock pour : {selectedMed.name}
-            </div>
-          )}
-
+        <div className="space-y-4">
           <div className="flex rounded-2xl bg-slate-100 p-1">
             <button
               type="button"
@@ -539,15 +510,63 @@ export default function SearchMedications() {
             </button>
             <button
               type="button"
-              onClick={() => setPharmacyTab("stock")}
+              onClick={() => setPharmacyTab("pharmacy")}
               className={cn(
                 "flex-1 rounded-xl py-2.5 text-sm font-bold transition-all",
-                pharmacyTab === "stock" ? "bg-white text-primary shadow" : "text-muted-foreground",
+                pharmacyTab === "pharmacy" ? "bg-white text-primary shadow" : "text-muted-foreground",
               )}
             >
-              Avec stock ({pharmaciesWithStock.length})
+              Pharmacie ({pharmaciesNearby.length})
             </button>
           </div>
+
+          <div
+            className={cn(
+              "flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm text-muted-foreground",
+              pharmacyTab === "garde"
+                ? "border-amber-100 bg-amber-50/50"
+                : "border-primary/15 bg-primary/5",
+            )}
+          >
+            <Navigation
+              className={cn(
+                "h-4 w-4 shrink-0",
+                pharmacyTab === "garde" ? "text-amber-600" : "text-primary",
+                isFindingLocation && "animate-spin",
+              )}
+            />
+            <span className="flex-1">
+              {isFindingLocation
+                ? "Localisation en cours…"
+                : userLocation
+                  ? pharmacyTab === "pharmacy"
+                    ? `Pharmacies de ${locationCity ?? "votre ville"} — du plus proche au plus loin`
+                    : `Les plus proches${locationCity ? ` · ${locationCity}` : ""}`
+                  : "Autorisez la position pour afficher les pharmacies de votre ville"}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 shrink-0 rounded-xl font-bold"
+              disabled={isFindingLocation}
+              onClick={() => handleGetLocation(userLocation != null)}
+            >
+              {userLocation ? "Actualiser" : "Activer"}
+            </Button>
+          </div>
+
+          {pharmacyTab === "pharmacy" && (
+            <div className="relative flex items-center rounded-2xl border bg-white p-2 shadow-sm">
+              <Search className="ml-3 h-5 w-5 text-muted-foreground" />
+              <Input
+                value={pharmacyQuery}
+                onChange={(e) => setPharmacyQuery(e.target.value)}
+                placeholder="Filtrer par nom ou adresse…"
+                className="h-12 border-none bg-transparent focus-visible:ring-0"
+              />
+            </div>
+          )}
 
           {loadingPharmacies ? (
             <div className="flex justify-center py-20">
@@ -555,15 +574,19 @@ export default function SearchMedications() {
             </div>
           ) : pharmacyList.length === 0 ? (
             <div className="rounded-[30px] border border-dashed bg-slate-50 p-12 text-center text-muted-foreground">
-              {pharmacyTab === "stock"
-                ? selectedMed
-                  ? t("search.noResults")
-                  : "Sélectionnez un médicament dans l'onglet Médicaments pour voir les stocks."
-                : `Aucune pharmacie de garde${!userLocation ? " — activez votre position pour affiner" : ""}`}
+              {pharmacyTab === "pharmacy"
+                ? userLocation
+                  ? `Aucune pharmacie trouvée${locationCity ? ` à ${locationCity}` : " près de vous"}.`
+                  : "Autorisez la localisation pour lister les pharmacies de votre ville."
+                : userLocation
+                  ? "Aucune pharmacie de garde trouvée près de vous."
+                  : "Autorisez la localisation pour voir les pharmacies de garde les plus proches."}
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {pharmacyList.map((p) => renderPharmacyCard(p, pharmacyTab === "garde"))}
+            <div className="flex flex-col gap-2">
+              {pharmacyList.map((p, i) =>
+                pharmacyTab === "garde" ? renderGardeRow(p, i) : renderPharmacyRow(p, i),
+              )}
             </div>
           )}
         </div>

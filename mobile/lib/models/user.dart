@@ -17,12 +17,19 @@ class User {
   factory User.fromJson(Map<String, dynamic> json) {
     final rawId = json['id'];
     final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '') ?? 0;
+    final rawType = (json['type'] ?? 'standard').toString().toLowerCase();
+    final type = switch (rawType) {
+      'professionnel' || 'professional' || 'pharmacist' || 'pharmacien' => 'professional',
+      'administrateur' || 'admin' => 'admin',
+      'commercial' => 'commercial',
+      _ => 'standard',
+    };
     return User(
       id: id,
       email: json['email'],
       phone: json['phone'],
-      type: json['type'],
-      name: json['name'],
+      type: type,
+      name: json['name'] ?? 'Utilisateur',
     );
   }
 

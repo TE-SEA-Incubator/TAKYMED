@@ -1,5 +1,5 @@
 import React from "react";
-import logoImg from "./images/takymed1.png";
+import logoImg from "./images/takymed.png";
 import "../logo.css";
 import { cn } from "@/lib/utils";
 

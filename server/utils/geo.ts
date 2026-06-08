@@ -49,6 +49,30 @@ export function detectNearestRegion(lat: number, lng: number): string {
   return detectNearestCity(lat, lng).region;
 }
 
+/** Filtre les pharmacies appartenant à la ville détectée (adresse ou proximité du centre-ville). */
+export function pharmacyMatchesCity(
+  pharmacy: { address?: string | null; latitude?: number | null; longitude?: number | null },
+  city: CityInfo,
+  maxKmFromCenter = 45,
+): boolean {
+  const addr = (pharmacy.address ?? "").toLowerCase();
+  const cityNorm = city.name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "");
+  const addrNorm = addr.normalize("NFD").replace(/\p{M}/gu, "");
+  if (addrNorm.includes(cityNorm) || addr.includes(city.name.toLowerCase())) {
+    return true;
+  }
+
+  if (pharmacy.latitude != null && pharmacy.longitude != null) {
+    const d = haversineKm(pharmacy.latitude, pharmacy.longitude, city.lat, city.lng);
+    return d <= maxKmFromCenter;
+  }
+
+  return false;
+}
+
 export type WithDistance<T> = T & { distance: number | null };
 
 /** Ajoute la distance et trie par proximité. */

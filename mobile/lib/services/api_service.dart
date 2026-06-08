@@ -1,6 +1,8 @@
-
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../utils/phone_utils.dart';
+import '../utils/auth_phone.dart';
+import 'auth_exception.dart';
 
 class ApiService {
   static const String baseUrl = 'http://dev.takymed.com:3500/api';
@@ -57,17 +59,29 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> login(String phone, String type, String pin) async {
+    final normalizedPhone = _normalizeAuthPhone(phone);
     final response = await http.post(
       Uri.parse('$baseUrl/auth/login'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone': phone, 'type': type, 'pin': pin}),
+      body: jsonEncode({'phone': normalizedPhone, 'type': type, 'pin': pin.trim()}),
     );
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception(jsonDecode(response.body)['error'] ?? 'Échec de la connexion');
+      return _decodeJsonMap(response);
     }
+    if (response.statusCode == 401) {
+      try {
+        final data = _decodeJsonMap(response);
+        final error = data['error']?.toString() ?? 'Échec de la connexion';
+        if (data['pinRegenerated'] == true) {
+          throw AuthException(error, pinRegenerated: true);
+        }
+        throw AuthException(error);
+      } catch (e) {
+        if (e is AuthException) rethrow;
+      }
+    }
+    throw AuthException(_apiErrorMessage(response, fallback: 'Échec de la connexion'));
   }
 
   Future<Map<String, dynamic>> getOrdonnances(int userId) async {
@@ -277,18 +291,41 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> register(String name, String phone, String type, String pin) async {
+  Future<List<CountryOption>> getCountries() async {
+    final response = await http.get(Uri.parse('$baseUrl/countries'));
+    if (response.statusCode == 200) {
+      final data = _decodeJsonMap(response);
+      final list = data['countries'] as List<dynamic>? ?? [];
+      return list
+          .map((c) => CountryOption.fromJson(Map<String, dynamic>.from(c as Map)))
+          .toList();
+    }
+    return [CountryOption.fallback];
+  }
+
+  /// Inscription identique au web : téléphone + type → PIN envoyé par SMS.
+  Future<String> register(String phone, String type) async {
+    final normalizedPhone = _normalizeAuthPhone(phone);
     final response = await http.post(
       Uri.parse('$baseUrl/auth/register'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'name': name, 'phone': phone, 'type': type, 'pin': pin}),
+      body: jsonEncode({'phone': normalizedPhone, 'type': type}),
     );
 
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception(jsonDecode(response.body)['error'] ?? 'Échec de l\'inscription');
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final data = _decodeJsonMap(response);
+      return data['message']?.toString() ??
+          'Compte créé. Votre PIN a été envoyé par SMS.';
     }
+    throw Exception(_apiErrorMessage(response, fallback: 'Échec de l\'inscription'));
+  }
+
+  String _normalizeAuthPhone(String phone) {
+    final trimmed = phone.trim();
+    if (trimmed.toLowerCase() == 'admin') return 'admin';
+    if (trimmed.toLowerCase() == 'commercial') return 'commercial';
+    if (trimmed.startsWith('+')) return trimmed.replaceAll(' ', '');
+    return PhoneUtils.normalizeCameroon(trimmed);
   }
 
   Future<void> updateProfile(int userId, String name, String phone) async {
@@ -358,7 +395,7 @@ class ApiService {
     double? lat,
     double? lng,
     int? medId,
-    int limit = 25,
+    int limit = 80,
   }) async {
     final params = <String, String>{'limit': limit.toString()};
     if (lat != null && lng != null) {

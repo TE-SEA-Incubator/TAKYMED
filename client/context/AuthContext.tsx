@@ -39,7 +39,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.error || "Authentication failed");
+        const message = errorData?.error || "Authentication failed";
+        if (errorData?.pinRegenerated) {
+          toast.info(message);
+        } else {
+          throw new Error(message);
+        }
+        return false;
       }
 
       const userData: UserDTO = await response.json();

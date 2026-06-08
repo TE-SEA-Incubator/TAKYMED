@@ -63,6 +63,7 @@ interface UserRecord {
     pin?: string;
     pinExpiresAt?: string;
     pinUpdatedAt?: string;
+    protected?: boolean;
 }
 
 interface AdminPharmacy {
@@ -162,7 +163,7 @@ export default function AdminDashboard() {
     const [isChangeTypeOpen, setIsChangeTypeOpen] = useState(false);
 
     const [isEditUserOpen, setIsEditUserOpen] = useState(false);
-    const [clientToEdit, setClientToEdit] = useState<{ id: number; phone: string; name: string } | null>(null);
+    const [clientToEdit, setClientToEdit] = useState<{ id: number; phone: string; name: string; protected?: boolean } | null>(null);
 
     const [selectedCommercial, setSelectedCommercial] = useState<any | null>(null);
     const [commercialClients, setCommercialClients] = useState<any[]>([]);
@@ -318,13 +319,21 @@ export default function AdminDashboard() {
     }, [user?.id]);
 
     const handleDeleteUser = async (id: number) => {
+        const target = users.find((u) => u.id === id);
+        if (target?.protected) {
+            toast.error("Le compte administrateur système par défaut ne peut pas être supprimé.");
+            return;
+        }
         if (!confirm("Supprimer cet utilisateur ?")) return;
         const res = await fetch(`/api/admin/users/${id}`, { 
             method: 'DELETE',
             headers: { "x-user-id": user?.id?.toString() || "" }
         });
         if (res.ok) { toast.success("Utilisateur supprimé"); refreshData(); }
-        else toast.error("Erreur lors de la suppression");
+        else {
+            const data = await res.json().catch(() => null);
+            toast.error(data?.error || "Erreur lors de la suppression");
+        }
     };
 
     const handleAddUser = async () => {
@@ -377,6 +386,11 @@ export default function AdminDashboard() {
     };
 
     const openChangeTypeDialog = (userId: number, currentType: string) => {
+        const target = users.find((u) => u.id === userId);
+        if (target?.protected) {
+            toast.error("Le type du compte administrateur système par défaut ne peut pas être modifié.");
+            return;
+        }
         const typeMap: Record<string, number> = {
             'Standard': 1,
             'Professionnel': 2,
@@ -639,7 +653,8 @@ export default function AdminDashboard() {
                 if (selectedCommercial) fetchCommercialClients(selectedCommercial.id);
                 refreshData();
             } else {
-                toast.error("Erreur de mise à jour");
+                const data = await res.json().catch(() => null);
+                toast.error(data?.error || "Erreur de mise à jour");
             }
         } catch (err) {
             toast.error("Erreur réseau");
@@ -1041,6 +1056,11 @@ export default function AdminDashboard() {
                                                         <div>
                                                             <p className="font-extrabold text-slate-900 text-sm">{displayName}</p>
                                                             <p className="text-xs text-slate-500 font-bold">ID #{u.id}</p>
+                                                            {u.protected && (
+                                                                <span className="inline-block mt-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800">
+                                                                    Compte système
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </td>
@@ -1078,30 +1098,34 @@ export default function AdminDashboard() {
                                                             size="icon"
                                                             className="hover:bg-teal-50 hover:text-teal-600 rounded-xl"
                                                             onClick={() => {
-                                                                setClientToEdit({ id: u.id, phone: u.phone || "", name: u.name || "" });
+                                                                setClientToEdit({ id: u.id, phone: u.phone || "", name: u.name || "", protected: u.protected });
                                                                 setIsEditUserOpen(true);
                                                             }}
                                                             title="Modifier les infos"
                                                         >
                                                             <Edit2 size={15} />
                                                         </Button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="hover:bg-teal-50 hover:text-teal-600 rounded-xl"
-                                                            onClick={() => openChangeTypeDialog(u.id, u.type)}
-                                                            title="Changer le type de compte"
-                                                        >
-                                                            <ArrowRightLeft size={15} />
-                                                        </Button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="hover:bg-red-50 hover:text-red-500 rounded-xl"
-                                                            onClick={() => handleDeleteUser(u.id)}
-                                                        >
-                                                            <Trash2 size={15} />
-                                                        </Button>
+                                                        {!u.protected && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="hover:bg-teal-50 hover:text-teal-600 rounded-xl"
+                                                                onClick={() => openChangeTypeDialog(u.id, u.type)}
+                                                                title="Changer le type de compte"
+                                                            >
+                                                                <ArrowRightLeft size={15} />
+                                                            </Button>
+                                                        )}
+                                                        {!u.protected && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="hover:bg-red-50 hover:text-red-500 rounded-xl"
+                                                                onClick={() => handleDeleteUser(u.id)}
+                                                            >
+                                                                <Trash2 size={15} />
+                                                            </Button>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -2041,8 +2065,14 @@ export default function AdminDashboard() {
                                 value={clientToEdit?.phone || ""}
                                 onChange={(e) => setClientToEdit(prev => prev ? { ...prev, phone: e.target.value } : null)}
                                 placeholder="+221..."
-                                className="h-12 rounded-2xl border-slate-200 bg-slate-50 focus:bg-white focus:ring-teal-500 transition-all font-medium"
+                                disabled={clientToEdit?.protected}
+                                className="h-12 rounded-2xl border-slate-200 bg-slate-50 focus:bg-white focus:ring-teal-500 transition-all font-medium disabled:opacity-60"
                             />
+                            {clientToEdit?.protected && (
+                                <p className="text-xs text-amber-700 font-medium px-1">
+                                    L&apos;identifiant du compte administrateur système ne peut pas être modifié.
+                                </p>
+                            )}
                         </div>
                     </div>
                     <DialogFooter className="flex flex-row gap-2">

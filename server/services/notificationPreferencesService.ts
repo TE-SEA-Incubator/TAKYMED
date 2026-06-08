@@ -43,7 +43,9 @@ export function saveUserNotificationPreferences(
       ? [notifConfig.type]
       : [];
 
-  if (channels.length === 0) return;
+  if (channels.length === 0) {
+    throw new Error("No valid channels provided.");
+  }
 
   db.prepare(`
     UPDATE PreferencesNotificationUtilisateurs
@@ -52,7 +54,7 @@ export function saveUserNotificationPreferences(
   `).run(userId);
 
   const insertPref = db.prepare(`
-    INSERT INTO PreferencesNotificationUtilisateurs (id_utilisateur, id_canal, valeur_contact, est_active)
+    INSERT OR REPLACE INTO PreferencesNotificationUtilisateurs (id_utilisateur, id_canal, valeur_contact, est_active)
     VALUES (?, ?, ?, 1)
   `);
 
@@ -67,16 +69,21 @@ export function saveUserNotificationPreferences(
     }
   }
 
-  for (const channel of channels) {
-    if (channel === "push") {
-      insertPref.run(userId, CHANNEL_MAP.push, `user:${userId}`);
-      continue;
-    }
+        for (const channel of channels) {
+        if (channel === "push") {
+          insertPref.run(userId, CHANNEL_MAP['push'], `user:${userId}`);
+          continue;
+        }
 
-    for (const recipient of recipients) {
-      insertPref.run(userId, CHANNEL_MAP[channel], recipient);
-    }
-  }
+        // Skip if no recipients for channels that require contact info
+        if (recipients.length === 0) {
+          console.warn(`No recipients found for channel ${channel}, skipping insert.`);
+          continue;
+        }
+        for (const recipient of recipients) {
+          insertPref.run(userId, CHANNEL_MAP[channel], recipient);
+        }
+      }
 }
 
 export function getActiveNotificationPreferences(

@@ -185,7 +185,7 @@ export function Layout({ children }: LayoutProps) {
             className="group flex h-full items-center gap-3 md:gap-4 active:scale-95 transition-transform shrink-0"
           >
             <div className="relative flex h-full items-center justify-center py-1 transition-all duration-700 hover:rotate-1">
-              <Logo size="nav" badge />
+              <Logo size="nav" />
             </div>
           </Link>
 
@@ -337,7 +337,7 @@ export function Layout({ children }: LayoutProps) {
                 >
                   <SheetHeader className="mb-6 text-left">
                     <div className="mb-4 flex justify-center">
-                      <Logo size="small" badge />
+                      <Logo size="small" />
                     </div>
                     <div className="rounded-[1.75rem] border border-primary/10 bg-white/90 p-4 shadow-[0_20px_40px_rgba(15,23,42,0.08)]">
                       <div className="flex items-center justify-between gap-3">

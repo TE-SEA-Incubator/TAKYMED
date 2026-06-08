@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'theme/app_theme.dart';
 import 'services/api_service.dart';
 import 'services/notification_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'providers/auth_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
@@ -16,6 +17,7 @@ import 'screens/commercial_register_screen.dart';
 import 'screens/commercial_dashboard_screen.dart';
 import 'widgets/main_shell.dart';
 import 'screens/splash_screen.dart';
+import 'screens/onboarding_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -57,15 +59,47 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class AuthWrapper extends StatelessWidget {
+class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  bool _onboardingDone = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOnboardingStatus();
+  }
+
+  Future<void> _loadOnboardingStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _onboardingDone = prefs.getBool('onboarding_done') ?? false;
+    });
+  }
+
+  void _onOnboardingComplete() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('onboarding_done', true);
+    setState(() => _onboardingDone = true);
+  }
 
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
+
     if (!authProvider.isInitialized) {
       return const SplashScreen();
     }
+
+    if (!_onboardingDone) {
+      return OnboardingScreen(onComplete: _onOnboardingComplete);
+    }
+
     return authProvider.isAuthenticated ? const MainShell() : const LoginScreen();
   }
 }

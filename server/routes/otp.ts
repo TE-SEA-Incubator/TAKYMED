@@ -3,11 +3,13 @@ import { db } from "../db";
 import bcrypt from "bcrypt";
 import { z } from "zod";
 import { notificationProvider } from "../services/notificationProvider";
+import { findUserByPhone, normalizePhone } from "../utils/phone";
+import { toUserDTO } from "../utils/authUser";
 
 const router = Router();
 
 const otpRequestSchema = z.object({
-    phone: z.string().min(8).max(20),
+    phone: z.string().min(3).max(20),
     channel: z.enum(["SMS", "WhatsApp", "Voice"]).default("SMS"),
 });
 
@@ -51,16 +53,19 @@ function cleanupExpiredOTPs() {
 // Request OTP
 router.post("/pin/request", async (req, res) => {
     try {
-        const { phone, channel } = otpRequestSchema.parse(req.body);
+        const parsed = otpRequestSchema.parse(req.body);
+        const phone = normalizePhone(parsed.phone);
+        const channel = parsed.channel;
 
-        // Clean expired OTPs first
+        if (!phone) {
+            return res.status(400).json({ error: "Numéro de téléphone invalide" });
+        }
+
         cleanupExpiredOTPs();
 
-        // Check if user exists
-        let user = db.prepare("SELECT id_utilisateur FROM Utilisateurs WHERE numero_telephone = ?").get(phone);
-        const isNewUser = !user; // Check before creating
+        let user = findUserByPhone(phone);
+        const isNewUser = !user;
 
-        // If user doesn't exist, create a Standard account automatically
         if (!user) {
             const standardType = db.prepare("SELECT id_type_compte FROM TypesComptes WHERE nom_type = 'Standard'").get() as { id_type_compte: number } | undefined;
 
@@ -69,8 +74,8 @@ router.post("/pin/request", async (req, res) => {
             }
 
             const result = db.prepare(`
-                INSERT INTO Utilisateurs (numero_telephone, id_type_compte, est_pharmacien)
-                VALUES (?, ?, 0)
+                INSERT INTO Utilisateurs (numero_telephone, id_type_compte, est_pharmacien, est_valide)
+                VALUES (?, ?, 0, 1)
             `).run(phone, standardType.id_type_compte);
 
             db.prepare(`
@@ -78,10 +83,9 @@ router.post("/pin/request", async (req, res) => {
                 VALUES (?, ?)
             `).run(result.lastInsertRowid, `User ${phone.slice(-4)}`);
 
-            user = { id_utilisateur: result.lastInsertRowid };
+            user = findUserByPhone(phone);
         }
 
-        // Check for existing pending OTP
         const existingOtp = db.prepare(`
             SELECT id_otp, expires_at, attempts
             FROM OtpRequests
@@ -127,11 +131,16 @@ router.post("/pin/request", async (req, res) => {
 // Verify OTP
 router.post("/pin/verify", async (req, res) => {
     try {
-        const { phone, otp, otpId } = z.object({
-            phone: z.string().min(8).max(20),
+        const { phone: rawPhone, otp, otpId } = z.object({
+            phone: z.string().min(3).max(20),
             otp: z.string().length(6),
             otpId: z.number().optional()
         }).parse(req.body);
+
+        const phone = normalizePhone(rawPhone);
+        if (!phone) {
+            return res.status(400).json({ error: "Numéro de téléphone invalide" });
+        }
 
         // Find OTP request
         let otpRecord: { id_otp: number; phone: string; otp_hash: string; expires_at: string; attempts: number } | undefined;
@@ -180,29 +189,17 @@ router.post("/pin/verify", async (req, res) => {
             WHERE id_otp = ?
         `).run(otpRecord.id_otp);
 
-        // Get user and create session
-        const user = db.prepare(`
-            SELECT u.*, tc.nom_type as type, p.nom_complet as name
-            FROM Utilisateurs u
-            JOIN TypesComptes tc ON u.id_type_compte = tc.id_type_compte
-            LEFT JOIN ProfilsUtilisateurs p ON u.id_utilisateur = p.id_utilisateur
-            WHERE u.numero_telephone = ?
-        `).get(phone) as any;
+        const user = findUserByPhone(phone);
 
-        // TODO: Generate JWT token here
-        const token = "jwt-token-placeholder"; // Replace with real JWT
+        if (!user) {
+            return res.status(404).json({ error: "Utilisateur non trouvé" });
+        }
 
         res.json({
             success: true,
             message: "Connexion réussie",
-            user: {
-                id: user.id_utilisateur,
-                phone: user.numero_telephone,
-                type: user.type,
-                name: user.name,
-                email: user.email
-            },
-            token
+            user: toUserDTO(user),
+            token: "jwt-token-placeholder",
         });
 
     } catch (error) {

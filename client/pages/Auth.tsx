@@ -8,10 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   ArrowRight,
-  Phone,
-  ShieldCheck,
   AlertCircle,
-  Info,
   Smartphone,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -47,7 +44,8 @@ export default function Auth({ mode }: { mode: "login" | "register" }) {
   }, []);
 
   const fullPhone = useMemo(() => {
-    if (phone.trim() === "admin") return "admin";
+    const trimmed = phone.trim();
+    if (trimmed === "admin" || trimmed === "commercial") return trimmed;
     const country = countries.find(c => c.code === selectedCountry);
     if (!country) return phone.trim();
     const cleanPhone = phone.trim().replace(/^\+/, '');
@@ -83,7 +81,10 @@ export default function Auth({ mode }: { mode: "login" | "register" }) {
           return;
         }
 
-        toast.success(t('auth.accountCreated'));
+        const responseData = await response.json().catch(() => null);
+        toast.success(
+          responseData?.message || t('auth.accountCreated'),
+        );
         setStep("pin");
       }
 
@@ -107,20 +108,13 @@ export default function Auth({ mode }: { mode: "login" | "register" }) {
           ? t('auth.connectedCreated')
           : t('auth.authSuccess'),
       );
-      const savedUser = localStorage.getItem("takymed_user");
+      const savedUser = sessionStorage.getItem("takymed_user");
       const parsed = savedUser ? JSON.parse(savedUser) : null;
       navigate(
         parsed?.type === "admin" ? "/admin" : 
         parsed?.type === "commercial" ? "/commercial" : "/dashboard"
       );
     }
-  };
-
-  const setTestUser = (testPhone: string, testPin: string, testType?: AccountType) => {
-    setPhone(testPhone);
-    setPin(testPin);
-    if (testType) setSelectedType(testType);
-    toast.info(t('auth.testFilled'));
   };
 
   return (
@@ -130,7 +124,7 @@ export default function Auth({ mode }: { mode: "login" | "register" }) {
           to="/"
           className="flex flex-col items-center justify-center mb-10 group"
         >
-          <Logo size="large" badge className="mb-3 group-hover:scale-[1.02] transition-transform" />
+          <Logo size="large" className="mb-3 group-hover:scale-[1.02] transition-transform" />
           <span className="text-xs font-bold tracking-[0.3em] text-muted-foreground uppercase opacity-80">
             Take Your Medicine
           </span>
@@ -235,43 +229,6 @@ export default function Auth({ mode }: { mode: "login" | "register" }) {
               </Button>
             </form>
           )}
-
-          <div className="mt-8 p-4 bg-primary/5 rounded-2xl border border-primary/10">
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-primary mb-3 flex items-center gap-2">
-              <Info className="h-3 w-3" />
-              {t('auth.testAccounts')}
-            </h4>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => { setSelectedCountry("CM"); setTestUser("600000001", "1234"); }}
-                className="text-[10px] bg-white border border-slate-200 px-2 py-1 rounded-lg"
-              >
-                Standard
-              </button>
-              <button
-                type="button"
-                onClick={() => { setSelectedCountry("CM"); setTestUser("612345678", "1234", "professional"); }}
-                className="text-[10px] bg-white border border-slate-200 px-2 py-1 rounded-lg"
-              >
-                Pro
-              </button>
-              <button
-                type="button"
-                onClick={() => { setSelectedCountry("CM"); setTestUser("commercial", "1234", "commercial"); }}
-                className="text-[10px] bg-white border border-slate-200 px-2 py-1 rounded-lg"
-              >
-                Commercial
-              </button>
-              <button
-                type="button"
-                onClick={() => setTestUser("admin", "admin", "admin")}
-                className="text-[10px] bg-white border border-slate-200 px-2 py-1 rounded-lg"
-              >
-                Admin
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>

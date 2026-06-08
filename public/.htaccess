@@ -1,0 +1,19 @@
+# TAKYMED — hébergement statique IONOS (takymed.com)
+# /api et /uploads doivent être proxifiés vers le backend (82.165.150.150:3500) dans le panneau IONOS.
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Laisser /api et /uploads au proxy Apache (configuration vhost)
+  RewriteRule ^api(/|$) - [L]
+  RewriteRule ^uploads(/|$) - [L]
+
+  # Fichiers statiques existants (assets, sw.js, favicon…)
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # React Router — toutes les autres URLs → index.html
+  RewriteRule ^ index.html [L]
+</IfModule>

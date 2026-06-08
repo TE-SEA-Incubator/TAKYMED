@@ -14,6 +14,7 @@ class AppTextField extends StatelessWidget {
   final VoidCallback? onTap;
   final ValueChanged<String>? onChanged;
   final FocusNode? focusNode;
+  final int? maxLength;
 
   const AppTextField({
     super.key,
@@ -29,6 +30,7 @@ class AppTextField extends StatelessWidget {
     this.onTap,
     this.onChanged,
     this.focusNode,
+    this.maxLength,
   });
 
   @override
@@ -38,6 +40,7 @@ class AppTextField extends StatelessWidget {
       focusNode: focusNode,
       obscureText: obscureText,
       keyboardType: keyboardType,
+      maxLength: maxLength,
       validator: validator,
       readOnly: readOnly,
       onTap: onTap,

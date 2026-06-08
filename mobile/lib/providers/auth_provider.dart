@@ -29,40 +29,19 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> login(String phone, String type, String pin, ApiService apiService) async {
+  Future<bool> login(String phone, String type, String pin, ApiService apiService) async {
     _isLoading = true;
     notifyListeners();
 
     try {
       final userData = await apiService.login(phone, type, pin);
       _user = User.fromJson(userData);
-      
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('user', jsonEncode(_user!.toJson()));
-      
-      notifyListeners();
-    } catch (e) {
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
 
-  Future<void> register(String name, String phone, String type, String pin, ApiService apiService) async {
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      final userData = await apiService.register(name, phone, type, pin);
-      _user = User.fromJson(userData);
-      
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('user', jsonEncode(_user!.toJson()));
-      
       notifyListeners();
-    } catch (e) {
-      rethrow;
+      return true;
     } finally {
       _isLoading = false;
       notifyListeners();
