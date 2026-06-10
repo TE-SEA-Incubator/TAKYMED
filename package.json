@@ -46,6 +46,7 @@
     "dompurify": "^3.2.4",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
+    "greenlock-express": "^4.0.3",
     "gtts": "^0.2.1",
     "i18n-iso-countries": "^7.14.0",
     "indent-string": "^5.0.0",

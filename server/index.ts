@@ -1,8 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import fs from "fs";
-import https from "https";
+import greenlock from "greenlock-express";
 import { handleDemo } from "./routes/demo";
 import { authRouter } from "./routes/auth";
 import { prescriptionRouter } from "./routes/prescriptions";
@@ -83,7 +82,11 @@ export function createServer() {
   startReminderWorker();
   startPharmacyScheduler();
 
-  // Mode HTTP Simple (Caddy gérera le HTTPS)
-  console.log("🚀 Server running in HTTP mode (HTTPS managed by Caddy)");
-  return app;
+  // Greenlock HTTPS configuration
+  return greenlock.init({
+    packageRoot: process.cwd(),
+    configDir: './greenlock.d',
+    maintainerEmail: 'admin@takymed.com', // Remplacer par votre email
+    cluster: false
+  }).serve(app);
 }

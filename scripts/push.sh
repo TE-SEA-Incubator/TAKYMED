@@ -83,13 +83,7 @@ fi
 
 # 2.7 Sync SSL Certificates
 if [ -d "$SOURCE_DIR/server/cert" ]; then
-    echo "🔐 Syncing SSL certificates..."
-    rsync -av -e "$RSYNC_SSH" "$SOURCE_DIR/server/cert/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/server/cert/" \
-        || { echo "❌ Certificate synchronization failed."; exit 1; }
-    
-    echo "🔒 Setting secure permissions on SSL files..."
-    $SSH_CMD $REMOTE_USER@$REMOTE_HOST "chmod 600 $REMOTE_DIR/server/cert/*.key && chmod 644 $REMOTE_DIR/server/cert/*.cer" \
-        || { echo "❌ Failed to set permissions on SSL files."; exit 1; }
+    echo "⚠️ Certificats SSL dans server/cert ne sont plus nécessaires avec Greenlock."
 fi
 
 # 3. Build on Remote
