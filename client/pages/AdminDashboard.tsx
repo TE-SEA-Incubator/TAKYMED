@@ -222,7 +222,7 @@ export default function AdminDashboard() {
         }
 
         try {
-            const res = await fetch("https://dev.takymed.comhttps://dev.takymed.com/api/admin/medications/all", { 
+            const res = await fetch("http://dev.takymed.com/api/admin/medications/all", { 
                 method: "DELETE",
                 headers: { "x-user-id": user?.id?.toString() || "" }
             });
@@ -255,16 +255,16 @@ export default function AdminDashboard() {
                 commRes,
                 unassignedRes,
             ] = await Promise.all([
-                fetch("https://dev.takymed.comhttps://dev.takymed.com/api/admin/stats", { headers }),
-                fetch("https://dev.takymed.comhttps://dev.takymed.com/api/admin/users", { headers }),
-                fetch("https://dev.takymed.comhttps://dev.takymed.com/api/admin/medications", { headers }),
-                fetch("https://dev.takymed.comhttps://dev.takymed.com/api/admin/settings", { headers }),
-                fetch("https://dev.takymed.comhttps://dev.takymed.com/api/admin/pharmacies", { headers }),
-                fetch("https://dev.takymed.comhttps://dev.takymed.com/api/categories", { headers }),
-                fetch("https://dev.takymed.comhttps://dev.takymed.com/api/admin/upgrade-requests", { headers }),
-                fetch("https://dev.takymed.comhttps://dev.takymed.com/api/admin/monthly-activity", { headers }),
-                fetch("https://dev.takymed.comhttps://dev.takymed.com/api/admin/commercials", { headers }),
-                fetch("https://dev.takymed.comhttps://dev.takymed.com/api/admin/unassigned-clients", { headers }),
+                fetch("http://dev.takymed.com/api/admin/stats", { headers }),
+                fetch("http://dev.takymed.com/api/admin/users", { headers }),
+                fetch("http://dev.takymed.com/api/admin/medications", { headers }),
+                fetch("http://dev.takymed.com/api/admin/settings", { headers }),
+                fetch("http://dev.takymed.com/api/admin/pharmacies", { headers }),
+                fetch("http://dev.takymed.com/api/categories", { headers }),
+                fetch("http://dev.takymed.com/api/admin/upgrade-requests", { headers }),
+                fetch("http://dev.takymed.com/api/admin/monthly-activity", { headers }),
+                fetch("http://dev.takymed.com/api/admin/commercials", { headers }),
+                fetch("http://dev.takymed.com/api/admin/unassigned-clients", { headers }),
             ]);
 
             if (statsRes.ok && usersRes.ok && medsRes.ok && settingsRes.ok && pharmRes.ok && catRes.ok) {
@@ -325,7 +325,7 @@ export default function AdminDashboard() {
             return;
         }
         if (!confirm("Supprimer cet utilisateur ?")) return;
-        const res = await fetch(`https://dev.takymed.com/api/admin/users/${id}`, { 
+        const res = await fetch(`http://dev.takymed.com/api/admin/users/${id}`, { 
             method: 'DELETE',
             headers: { "x-user-id": user?.id?.toString() || "" }
         });
@@ -345,7 +345,7 @@ export default function AdminDashboard() {
             toast.error("Veuillez fournir un mot de passe");
             return;
         }
-        const res = await fetch("https://dev.takymed.comhttps://dev.takymed.com/api/admin/users", {
+        const res = await fetch("http://dev.takymed.com/api/admin/users", {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -366,7 +366,7 @@ export default function AdminDashboard() {
 
     const handleChangeUserType = async () => {
         if (!changingTypeUserId) return;
-        const res = await fetch(`https://dev.takymed.com/api/admin/users/${changingTypeUserId}`, {
+        const res = await fetch(`http://dev.takymed.com/api/admin/users/${changingTypeUserId}`, {
             method: 'PUT',
             headers: { 
                 'Content-Type': 'application/json',
@@ -426,7 +426,7 @@ export default function AdminDashboard() {
             return;
         }
 
-        const res = await fetch("https://dev.takymed.comhttps://dev.takymed.com/api/admin/medications", {
+        const res = await fetch("http://dev.takymed.com/api/admin/medications", {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -484,7 +484,7 @@ export default function AdminDashboard() {
             return;
         }
 
-        const res = await fetch(`https://dev.takymed.com/api/admin/medications/${editingMed.id}`, {
+        const res = await fetch(`http://dev.takymed.com/api/admin/medications/${editingMed.id}`, {
             method: 'PUT',
             headers: { 
                 'Content-Type': 'application/json',
@@ -506,7 +506,7 @@ export default function AdminDashboard() {
 
     const handleDeleteMed = async (id: number) => {
         if (!confirm("Retirer ce médicament ?")) return;
-        const res = await fetch(`https://dev.takymed.com/api/admin/medications/${id}`, { 
+        const res = await fetch(`http://dev.takymed.com/api/admin/medications/${id}`, { 
             method: 'DELETE',
             headers: { "x-user-id": user?.id?.toString() || "" }
         });
@@ -515,7 +515,7 @@ export default function AdminDashboard() {
     };
 
     const handleUpdateSetting = async (id: number, price: number, description: string, maxOrdonnances: number | null, maxRappels: number | null) => {
-        const res = await fetch(`https://dev.takymed.com/api/admin/settings/${id}`, {
+        const res = await fetch(`http://dev.takymed.com/api/admin/settings/${id}`, {
             method: 'PUT',
             headers: { 
                 'Content-Type': 'application/json',
@@ -529,7 +529,7 @@ export default function AdminDashboard() {
 
     const handleAddCat = async () => {
         if (!newCat.name.trim()) return toast.error("Le nom est requis");
-        const res = await fetch("https://dev.takymed.comhttps://dev.takymed.com/api/categories", {
+        const res = await fetch("http://dev.takymed.com/api/categories", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(newCat)
@@ -547,7 +547,7 @@ export default function AdminDashboard() {
 
     const handleUpdateCat = async () => {
         if (!editingCat || !editingCat.name.trim()) return;
-        const res = await fetch(`https://dev.takymed.com/api/categories/${editingCat.id}`, {
+        const res = await fetch(`http://dev.takymed.com/api/categories/${editingCat.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(editingCat)
@@ -564,7 +564,7 @@ export default function AdminDashboard() {
 
     const handleDeleteCat = async (id: number) => {
         if (!confirm("Supprimer cette catégorie d'âge ?")) return;
-        const res = await fetch(`https://dev.takymed.com/api/categories/${id}`, { method: 'DELETE' });
+        const res = await fetch(`http://dev.takymed.com/api/categories/${id}`, { method: 'DELETE' });
         if (res.ok) {
             toast.success("Catégorie supprimée");
             refreshData();
@@ -578,7 +578,7 @@ export default function AdminDashboard() {
         if (status === 'rejected' && adminNotes === null) return;
 
         try {
-            const res = await fetch(`https://dev.takymed.com/api/admin/upgrade-requests/${id}/process`, {
+            const res = await fetch(`http://dev.takymed.com/api/admin/upgrade-requests/${id}/process`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status, adminNotes, processedBy: user?.id })
@@ -598,7 +598,7 @@ export default function AdminDashboard() {
     const fetchCommercialClients = async (commId: number) => {
         setLoadingClients(true);
         try {
-            const res = await fetch(`https://dev.takymed.com/api/admin/commercial-clients/${commId}`, {
+            const res = await fetch(`http://dev.takymed.com/api/admin/commercial-clients/${commId}`, {
                 headers: { "x-user-id": user?.id?.toString() || "" }
             });
             if (res.ok) {
@@ -615,7 +615,7 @@ export default function AdminDashboard() {
     const handleReassignClient = async (newCommId: number) => {
         if (!clientToReassign) return;
         try {
-            const res = await fetch("https://dev.takymed.comhttps://dev.takymed.com/api/admin/reassign-client", {
+            const res = await fetch("http://dev.takymed.com/api/admin/reassign-client", {
                 method: 'PATCH',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -639,7 +639,7 @@ export default function AdminDashboard() {
     const handleUpdateUser = async () => {
         if (!clientToEdit) return;
         try {
-            const res = await fetch(`https://dev.takymed.com/api/admin/users/${clientToEdit.id}`, {
+            const res = await fetch(`http://dev.takymed.com/api/admin/users/${clientToEdit.id}`, {
                 method: 'PATCH',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -698,7 +698,7 @@ export default function AdminDashboard() {
                 const unitId = parts[2]?.toLowerCase().includes('gélule') ? 2 : parts[2]?.toLowerCase().includes('sirop') ? 3 : 1;
                 const dose = parseFloat(parts[3] || parts[2]) || 1;
                 try {
-                    const res = await fetch("https://dev.takymed.comhttps://dev.takymed.com/api/admin/medications", {
+                    const res = await fetch("http://dev.takymed.com/api/admin/medications", {
                         method: 'POST',
                         headers: { 
                             'Content-Type': 'application/json',

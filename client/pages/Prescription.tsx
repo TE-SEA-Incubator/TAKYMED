@@ -156,7 +156,7 @@ export default function Prescription() {
   useEffect(() => {
     async function fetchMeds() {
       try {
-        const res = await fetch('https://dev.takymed.comhttps://dev.takymed.com/api/medications');
+        const res = await fetch('http://dev.takymed.com/api/medications');
         if (res.ok) {
           const data = await res.json();
           setDbMedications(data.medications);
@@ -168,7 +168,7 @@ export default function Prescription() {
 
     async function fetchInteractions() {
       try {
-        const res = await fetch('https://dev.takymed.comhttps://dev.takymed.com/api/medications/interactions');
+        const res = await fetch('http://dev.takymed.com/api/medications/interactions');
         if (res.ok) {
           const data = await res.json();
           setInteractions(data.interactions);
@@ -180,7 +180,7 @@ export default function Prescription() {
 
     async function fetchCategories() {
       try {
-        const res = await fetch('https://dev.takymed.comhttps://dev.takymed.com/api/categories');
+        const res = await fetch('http://dev.takymed.com/api/categories');
         if (res.ok) {
           const data = await res.json();
           setCategories(data.categories);
@@ -196,7 +196,7 @@ export default function Prescription() {
 
     async function fetchCountries() {
       try {
-        const res = await fetch('https://dev.takymed.comhttps://dev.takymed.com/api/countries');
+        const res = await fetch('http://dev.takymed.com/api/countries');
         if (res.ok) {
           const data = await res.json();
           setCountries(data.countries);
@@ -889,7 +889,7 @@ export default function Prescription() {
                     setIsSubmitting(true);
                     try {
                       // 1. Save to DB
-                       const res = await fetch("https://dev.takymed.comhttps://dev.takymed.com/api/prescriptions", {
+                       const res = await fetch("http://dev.takymed.com/api/prescriptions", {
                         method: "POST",
                         headers: { 
                            "Content-Type": "application/json",

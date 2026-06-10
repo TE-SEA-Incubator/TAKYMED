@@ -53,7 +53,7 @@ export default function SearchMedications() {
 
   const fetchInteractions = async () => {
     try {
-      const res = await fetch('https://dev.takymed.comhttps://dev.takymed.com/api/medications/interactions');
+      const res = await fetch('http://dev.takymed.com/api/medications/interactions');
       if (res.ok) {
         const data = await res.json();
         setInteractions(data.interactions);
@@ -88,7 +88,7 @@ export default function SearchMedications() {
       setLoading(true);
       setAiResult(null);
       try {
-        const res = await fetch(`https://dev.takymed.com/api/medications?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`http://dev.takymed.com/api/medications?q=${encodeURIComponent(query)}`);
         if (res.ok) {
           const data = await res.json();
           setMedications(data.medications);
@@ -115,7 +115,7 @@ export default function SearchMedications() {
     setAiLoading(true);
     setAiResult(null);
     try {
-      const res = await fetch(`https://dev.takymed.com/api/medications/ai-info?name=${encodeURIComponent(q)}`);
+      const res = await fetch(`http://dev.takymed.com/api/medications/ai-info?name=${encodeURIComponent(q)}`);
       const contentType = res.headers.get("content-type") ?? "";
       if (!contentType.includes("application/json")) {
         throw new Error(`Réponse serveur invalide (${res.status})`);
@@ -158,7 +158,7 @@ export default function SearchMedications() {
   // Fetch pharmacies (garde + stock) when on pharmacy section
   const fetchNearbyPharmacies = async () => {
     setLoadingPharmacies(true);
-    let url = `https://dev.takymed.com/api/pharmacies/nearby?limit=80`;
+    let url = `http://dev.takymed.com/api/pharmacies/nearby?limit=80`;
     if (userLocation) {
       url += `&lat=${userLocation.lat}&lng=${userLocation.lng}`;
     }
