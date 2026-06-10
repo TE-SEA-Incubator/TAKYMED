@@ -241,40 +241,6 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                           ),
                           const SizedBox(height: 24),
                         ],
-                        AnimatedFadeSlide(
-                          index: 2,
-                          child: Text(
-                            'Actions rapides',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        if (isCommercial) ...[
-                          AnimatedFadeSlide(
-                            index: 3,
-                            child: QuickActionTile(
-                              title: 'Tableau de bord commercial',
-                              subtitle: 'Gérer vos clients',
-                              icon: Icons.business_center_rounded,
-                              color: AppColors.secondary,
-                              onTap: () => pushSlide(context, const CommercialDashboardScreen()),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          AnimatedFadeSlide(
-                            index: 4,
-                            child: QuickActionTile(
-                              title: 'Inscrire un client',
-                              subtitle: 'Ajouter un nouveau patient',
-                              icon: Icons.person_add_alt_1_rounded,
-                              color: AppColors.success,
-                              onTap: () => pushSlide(context, const CommercialRegisterScreen()),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
                       ]),
                     ),
                   ),
