@@ -5,7 +5,6 @@ import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/med_helpers.dart';
 import '../widgets/gradient_header.dart';
-import '../services/location_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SearchPharmaciesScreen extends StatefulWidget {
@@ -60,33 +59,86 @@ class _SearchPharmaciesScreenState extends State<SearchPharmaciesScreen> {
     }).toList();
   }
 
-  Future<void> _callPharmacy(String? phone) async {
-    if (phone == null || phone.isEmpty) return;
+  Future<void> _callPharmacy(String phone) async {
     final uri = Uri.parse('tel:${phone.replaceAll(RegExp(r'\s'), '')}');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible de lancer l\'appel')),
+      );
     }
   }
 
   Future<void> _openMaps(double lat, double lng, String name) async {
-    // Utilisation d'un format plus standard pour les directions
     final url = 'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving';
     final uri = Uri.parse(url);
-
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      // Fallback si l'URL ne passe pas, on essaie une recherche simple
-      final searchUrl = 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(name)}';
-      final searchUri = Uri.parse(searchUrl);
-      if (await canLaunchUrl(searchUri)) {
-        await launchUrl(searchUri, mode: LaunchMode.externalApplication);
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Impossible d\'ouvrir Google Maps')),
-        );
-      }
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d\'ouvrir Google Maps')),
+      );
     }
+  }
+
+  void _showPharmacyDetails(dynamic p) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(p['name'] ?? 'Pharmacie', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.location_on, color: AppColors.primary),
+              title: const Text('Adresse'),
+              subtitle: Text(p['address'] ?? 'Aucune adresse'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.phone, color: AppColors.primary),
+              title: const Text('Téléphone'),
+              subtitle: Text(p['phone'] ?? 'Non disponible'),
+              onTap: p['phone'] != null && p['phone'].toString().isNotEmpty
+                  ? () => _callPharmacy(p['phone'].toString())
+                  : null,
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: p['phone'] != null && p['phone'].toString().isNotEmpty
+                        ? () => _callPharmacy(p['phone'].toString())
+                        : null,
+                    icon: const Icon(Icons.phone),
+                    label: const Text('Appeler'),
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: p['latitude'] != null && p['longitude'] != null
+                        ? () => _openMaps((p['latitude'] as num).toDouble(), (p['longitude'] as num).toDouble(), p['name'])
+                        : null,
+                    icon: const Icon(Icons.map),
+                    label: const Text('Itinéraire'),
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary, foregroundColor: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -115,7 +167,6 @@ class _SearchPharmaciesScreenState extends State<SearchPharmaciesScreen> {
                 : _errorMessage != null
                     ? Center(child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)))
                     : ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 24),
                         itemCount: filteredList.length,
                         itemBuilder: (context, index) {
                           final p = filteredList[index];
@@ -124,9 +175,7 @@ class _SearchPharmaciesScreenState extends State<SearchPharmaciesScreen> {
                           return Card(
                             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                             child: ListTile(
-                              onTap: () {
-                                _showPharmacyDetails(p);
-                              },
+                              onTap: () => _showPharmacyDetails(p),
                               title: Row(
                                 children: [
                                   Expanded(child: Text(p['name'], style: const TextStyle(fontWeight: FontWeight.bold))),
@@ -149,61 +198,6 @@ class _SearchPharmaciesScreenState extends State<SearchPharmaciesScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: _loadPharmacies,
         child: const Icon(Icons.refresh),
-      ),
-    );
-  }
-
-  void _showPharmacyDetails(dynamic p) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(p['name'], style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            ListTile(leading: const Icon(Icons.location_on), title: Text(p['address'] ?? 'Aucune adresse')),
-            ListTile(
-              leading: const Icon(Icons.phone), 
-              title: Text(p['phone'] ?? 'Pas de téléphone'),
-              onTap: p['phone'] != null && p['phone'].toString().isNotEmpty
-                  ? () => _callPharmacy(p['phone'].toString())
-                  : null,
-            ),
-            const SizedBox(height: 16),
-            Column(
-              children: [
-                if (p['phone'] != null && p['phone'].toString().isNotEmpty)
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () => _callPharmacy(p['phone'].toString()),
-                      icon: const Icon(Icons.phone),
-                      label: const Text('Appeler'),
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-                    ),
-                  ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: p['latitude'] != null && p['longitude'] != null 
-                        ? () {
-                            Navigator.pop(context);
-                            _openMaps((p['latitude'] as num).toDouble(), (p['longitude'] as num).toDouble(), p['name']);
-                          }
-                        : null,
-                    icon: const Icon(Icons.map),
-                    label: const Text('Itinéraire (Google Maps)'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }
