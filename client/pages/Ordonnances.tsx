@@ -96,7 +96,7 @@ export default function Ordonnances() {
   async function fetchOrdonnances() {
     if (!user) return;
     try {
-      const res = await fetch(`/api/ordonnances?userId=${user.id}`);
+      const res = await fetch(`https://dev.takymed.com/api/ordonnances?userId=${user.id}`);
       if (res.ok) {
         const data = await res.json();
         setOrdonnances(data.ordonnances || []);
@@ -110,7 +110,7 @@ export default function Ordonnances() {
 
   async function fetchOrdonnanceDetails(id: number) {
     try {
-      const res = await fetch(`/api/ordonnances/${id}`);
+      const res = await fetch(`https://dev.takymed.com/api/ordonnances/${id}`);
       if (res.ok) {
         const data = await res.json();
         // Update the ordonnance in the list with details
@@ -149,7 +149,7 @@ export default function Ordonnances() {
 
   const saveEdit = async (id: number) => {
     try {
-      const res = await fetch(`/api/ordonnances/${id}`, {
+      const res = await fetch(`https://dev.takymed.com/api/ordonnances/${id}`, {
         method: "PUT",
         headers: authHeaders(),
         body: JSON.stringify(editForm)
@@ -172,7 +172,7 @@ export default function Ordonnances() {
 
   const cancelOrdonnance = async (id: number) => {
     try {
-      const res = await fetch(`/api/ordonnances/${id}/cancel`, {
+      const res = await fetch(`https://dev.takymed.com/api/ordonnances/${id}/cancel`, {
         method: "PATCH"
       });
       if (res.ok) {
@@ -188,7 +188,7 @@ export default function Ordonnances() {
 
   const reactivateOrdonnance = async (id: number) => {
     try {
-      const res = await fetch(`/api/ordonnances/${id}/reactivate`, {
+      const res = await fetch(`https://dev.takymed.com/api/ordonnances/${id}/reactivate`, {
         method: "PATCH"
       });
       if (res.ok) {
@@ -213,7 +213,7 @@ export default function Ordonnances() {
 
   const deleteOrdonnance = async (id: number) => {
     try {
-      const res = await fetch(`/api/ordonnances/${id}`, {
+      const res = await fetch(`https://dev.takymed.com/api/ordonnances/${id}`, {
         method: "DELETE",
         headers: authHeaders(),
       });
@@ -243,7 +243,7 @@ export default function Ordonnances() {
 
   const saveEditMed = async (ordonnanceId: number, medId: number) => {
     try {
-      const res = await fetch(`/api/ordonnances/${ordonnanceId}/medicaments/${medId}`, {
+      const res = await fetch(`https://dev.takymed.com/api/ordonnances/${ordonnanceId}/medicaments/${medId}`, {
         method: "PUT",
         headers: authHeaders(),
         body: JSON.stringify(editMedForm)
@@ -263,7 +263,7 @@ export default function Ordonnances() {
 
   const deleteMedicament = async (ordonnanceId: number, medId: number) => {
     try {
-      const res = await fetch(`/api/ordonnances/${ordonnanceId}/medicaments/${medId}`, {
+      const res = await fetch(`https://dev.takymed.com/api/ordonnances/${ordonnanceId}/medicaments/${medId}`, {
         method: "DELETE"
       });
       if (res.ok) {
@@ -283,7 +283,7 @@ export default function Ordonnances() {
       return;
     }
     try {
-      const res = await fetch(`/api/ordonnances/${ordonnanceId}/medicaments`, {
+      const res = await fetch(`https://dev.takymed.com/api/ordonnances/${ordonnanceId}/medicaments`, {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify(newMedForm)
@@ -311,7 +311,7 @@ export default function Ordonnances() {
   // Rappel functions
   const updateRappelTime = async (rappelId: number, heure_prevue: string, ordonnanceId: number) => {
     try {
-      const res = await fetch(`/api/ordonnances/prises/${rappelId}`, {
+      const res = await fetch(`https://dev.takymed.com/api/ordonnances/prises/${rappelId}`, {
         method: "PATCH",
         headers: authHeaders(),
         body: JSON.stringify({ heure_prevue: new Date(heure_prevue).toISOString() })
@@ -330,7 +330,7 @@ export default function Ordonnances() {
 
   const togglePriseStatus = async (rappelId: number, currentStatus: boolean, ordonnanceId: number) => {
     try {
-      const res = await fetch(`/api/ordonnances/prises/${rappelId}`, {
+      const res = await fetch(`https://dev.takymed.com/api/ordonnances/prises/${rappelId}`, {
         method: "PATCH",
         headers: authHeaders(),
         body: JSON.stringify({ statut_prise: !currentStatus })
@@ -347,7 +347,7 @@ export default function Ordonnances() {
 
   const markAllPrisesTaken = async (ordonnanceId: number) => {
     try {
-      const res = await fetch(`/api/ordonnances/${ordonnanceId}/prises/mark-all-taken`, {
+      const res = await fetch(`https://dev.takymed.com/api/ordonnances/${ordonnanceId}/prises/mark-all-taken`, {
         method: "PATCH",
         headers: authHeaders(),
         body: JSON.stringify({})
@@ -365,7 +365,7 @@ export default function Ordonnances() {
 
   const delayRappel = async (rappelId: number, ordonnanceId: number) => {
     try {
-      const res = await fetch(`/api/prescriptions/doses/${rappelId}/delay`, { method: "POST" });
+      const res = await fetch(`https://dev.takymed.com/api/prescriptions/doses/${rappelId}/delay`, { method: "POST" });
       if (res.ok) {
         toast.success("Prise reportée de 1 heure");
         fetchOrdonnanceDetails(ordonnanceId);

@@ -31,7 +31,7 @@ export default function Auth({ mode }: { mode: "login" | "register" }) {
   useEffect(() => {
     async function fetchCountries() {
       try {
-        const res = await fetch('https://dev.takymed.com/api/countries');
+        const res = await fetch('https://dev.takymed.comhttps://dev.takymed.com/api/countries');
         if (res.ok) {
           const data = await res.json();
           setCountries(data.countries);
@@ -68,7 +68,7 @@ export default function Auth({ mode }: { mode: "login" | "register" }) {
       if (mode === "login") {
         setStep("pin");
       } else if (mode === "register") {
-        const response = await fetch("https://dev.takymed.com/api/auth/register", {
+        const response = await fetch("https://dev.takymed.comhttps://dev.takymed.com/api/auth/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ phone: fullPhone, type: selectedType }),
