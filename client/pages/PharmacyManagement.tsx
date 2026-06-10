@@ -88,7 +88,7 @@ const API_BASE = "http://dev.takymed.com/api";
 
   const fetchMedications = async () => {
     try {
-      const res = await fetch('https://dev.takymed.com/api/medications');
+      const res = await fetch('/api/medications');
       if (res.ok) {
         const data = await res.json();
         setDbMedications(data.medications);
@@ -103,7 +103,7 @@ const API_BASE = "http://dev.takymed.com/api";
     if (!selectedPharmacyForStock || !stockUpdate.medicationId) return;
 
     try {
-      const res = await fetch(`https://dev.takymed.com/api/pharmacies/${selectedPharmacyForStock}/stock`, {
+      const res = await fetch(`/api/pharmacies/${selectedPharmacyForStock}/stock`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(stockUpdate)
@@ -129,7 +129,7 @@ const API_BASE = "http://dev.takymed.com/api";
         longitude: selectedCoords?.lng
       };
 
-      const res = await fetch('https://dev.takymed.com/api/pharmacies', {
+      const res = await fetch('/api/pharmacies', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -148,7 +148,7 @@ const API_BASE = "http://dev.takymed.com/api";
   const deletePharmacy = async (id: string) => {
     if (!confirm("Êtes-vous sûr de vouloir supprimer cette pharmacie ?")) return;
     try {
-      const res = await fetch(`https://dev.takymed.com/api/pharmacies/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/pharmacies/${id}`, { method: "DELETE" });
       if (res.ok) {
         fetchPharmacies();
         toast.info("Pharmacie supprimée.");

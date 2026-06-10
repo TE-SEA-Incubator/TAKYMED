@@ -67,8 +67,8 @@ export default function CommercialDashboard() {
     try {
       const headers = { "x-user-id": user.id.toString() };
       const [clientsRes, statsRes] = await Promise.all([
-        fetch(`https://dev.takymed.com/api/commercial/clients?commercialId=${user.id}`, { headers }),
-        fetch(`https://dev.takymed.com/api/commercial/stats?commercialId=${user.id}`, { headers }),
+        fetch(`/api/commercial/clients?commercialId=${user.id}`, { headers }),
+        fetch(`/api/commercial/stats?commercialId=${user.id}`, { headers }),
       ]);
       if (!clientsRes.ok) {
         const err = await clientsRes.json().catch(() => ({}));
@@ -104,7 +104,7 @@ export default function CommercialDashboard() {
     if (!newName || newName === currentName || !user?.id) return;
 
     try {
-      const res = await fetch(`https://dev.takymed.com/api/commercial/clients/${id}`, {
+      const res = await fetch(`/api/commercial/clients/${id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -133,7 +133,7 @@ export default function CommercialDashboard() {
     }
 
     try {
-      const res = await fetch(`https://dev.takymed.com/api/commercial/clients/${id}?commercialId=${user?.id}`, {
+      const res = await fetch(`/api/commercial/clients/${id}?commercialId=${user?.id}`, {
         method: "DELETE",
         headers: { "x-user-id": user?.id.toString() || "" },
       });

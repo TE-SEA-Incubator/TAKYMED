@@ -28,7 +28,7 @@ export default function ProfileSettings() {
 
   useEffect(() => {
     if (!user?.id) return;
-    fetch("https://dev.takymed.com/api/notifications/preferences", {
+    fetch("/api/notifications/preferences", {
       headers: { "x-user-id": user.id.toString() },
     })
       .then((r) => (r.ok ? r.json() : null))
@@ -68,7 +68,7 @@ export default function ProfileSettings() {
 
     setIsSaving(true);
     try {
-      const response = await fetch("https://dev.takymed.com/api/auth/profile", {
+      const response = await fetch("/api/auth/profile", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -96,7 +96,7 @@ export default function ProfileSettings() {
     setIsSavingNotif(true);
     try {
       const needsPhone = channels.some((c) => c !== "push");
-      const res = await fetch("https://dev.takymed.com/api/notifications/preferences", {
+      const res = await fetch("/api/notifications/preferences", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

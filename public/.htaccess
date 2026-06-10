@@ -1,13 +1,13 @@
 RewriteEngine On
 RewriteBase /
 
-# 1. Redirection explicite des requêtes /api vers le proxy PHP avec path
+# Redirection explicite des requêtes /api vers le proxy PHP
 RewriteRule ^api/(.*)$ /api_proxy.php?path=$1 [QSA,L]
 
-# 2. Fichiers statiques existants
+# Fichiers statiques existants
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# 3. React Router (SPA)
+# Routage React (SPA)
 RewriteRule ^ index.html [L]
