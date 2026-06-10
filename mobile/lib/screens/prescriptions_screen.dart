@@ -244,17 +244,13 @@ class _OrdonnancesScreenState extends State<OrdonnancesScreen> {
             ),
           Expanded(
             child: ordonnances.isEmpty
-                ? EmptyState(
+                EmptyState(
                     icon: Icons.description_outlined,
                     title: 'Aucune ordonnance',
-                    subtitle: 'Créez votre premier rappel de traitement',
-                    action: PrimaryButton(
-                      label: 'Nouveau rappel',
-                      icon: Icons.add_rounded,
-                      onPressed: () => pushSlide(context, const CreatePrescriptionScreen()),
-                    ),
+                    subtitle: 'Utilisez le bouton + pour créer votre premier rappel de traitement',
                   )
                 : RefreshIndicator(
+
                     onRefresh: _fetchOrdonnances,
                     color: AppColors.primary,
                     child: ListView.builder(

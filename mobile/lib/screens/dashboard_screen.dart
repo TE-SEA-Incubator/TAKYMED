@@ -251,31 +251,9 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                           ),
                         ),
                         const SizedBox(height: 16),
-                        AnimatedFadeSlide(
-                          index: 3,
-                          child: QuickActionTile(
-                            title: 'Créer un rappel',
-                            subtitle: 'Planifier une prise de médicament',
-                            icon: Icons.add_alarm_rounded,
-                            color: AppColors.primary,
-                            onTap: () => pushSlide(context, const CreatePrescriptionScreen()),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        AnimatedFadeSlide(
-                          index: 4,
-                          child: QuickActionTile(
-                            title: 'Pharmacies',
-                            subtitle: 'Trouver une pharmacie à proximité',
-                            icon: Icons.local_pharmacy_rounded,
-                            color: AppColors.secondary,
-                            onTap: () => pushSlide(context, const SearchPharmaciesScreen()),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
                         if (isCommercial) ...[
                           AnimatedFadeSlide(
-                            index: 5,
+                            index: 3,
                             child: QuickActionTile(
                               title: 'Tableau de bord commercial',
                               subtitle: 'Gérer vos clients',
@@ -286,7 +264,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                           ),
                           const SizedBox(height: 12),
                           AnimatedFadeSlide(
-                            index: 6,
+                            index: 4,
                             child: QuickActionTile(
                               title: 'Inscrire un client',
                               subtitle: 'Ajouter un nouveau patient',
