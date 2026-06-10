@@ -1,7 +1,6 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import greenlock from "greenlock-express";
 import { handleDemo } from "./routes/demo";
 import { authRouter } from "./routes/auth";
 import { prescriptionRouter } from "./routes/prescriptions";
@@ -82,11 +81,6 @@ export function createServer() {
   startReminderWorker();
   startPharmacyScheduler();
 
-  // Greenlock HTTPS configuration
-  return greenlock.init({
-    packageRoot: '..', // Le package.json est à la racine du projet
-    configDir: './greenlock.d',
-    maintainerEmail: 'ravelnghomsi@gmail.com',
-    cluster: false
-  }).serve(app);
+  console.log("🚀 Server running in HTTP mode");
+  return app;
 }
