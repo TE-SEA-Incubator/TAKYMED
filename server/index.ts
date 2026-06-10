@@ -84,7 +84,7 @@ export function createServer() {
 
   // Greenlock HTTPS configuration
   return greenlock.init({
-    packageRoot: process.cwd(),
+    packageRoot: '..', // Le package.json est à la racine du projet
     configDir: './greenlock.d',
     maintainerEmail: 'ravelnghomsi@gmail.com',
     cluster: false
