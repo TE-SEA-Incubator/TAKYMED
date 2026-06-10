@@ -222,7 +222,7 @@ export default function AdminDashboard() {
         }
 
         try {
-            const res = await fetch("/api/admin/medications/all", { 
+            const res = await fetch("https://dev.takymed.com:3500/api/admin/medications/all", { 
                 method: "DELETE",
                 headers: { "x-user-id": user?.id?.toString() || "" }
             });
@@ -255,16 +255,16 @@ export default function AdminDashboard() {
                 commRes,
                 unassignedRes,
             ] = await Promise.all([
-                fetch("/api/admin/stats", { headers }),
-                fetch("/api/admin/users", { headers }),
-                fetch("/api/admin/medications", { headers }),
-                fetch("/api/admin/settings", { headers }),
-                fetch("/api/admin/pharmacies", { headers }),
-                fetch("/api/categories", { headers }),
-                fetch("/api/admin/upgrade-requests", { headers }),
-                fetch("/api/admin/monthly-activity", { headers }),
-                fetch("/api/admin/commercials", { headers }),
-                fetch("/api/admin/unassigned-clients", { headers }),
+                fetch("https://dev.takymed.com:3500/api/admin/stats", { headers }),
+                fetch("https://dev.takymed.com:3500/api/admin/users", { headers }),
+                fetch("https://dev.takymed.com:3500/api/admin/medications", { headers }),
+                fetch("https://dev.takymed.com:3500/api/admin/settings", { headers }),
+                fetch("https://dev.takymed.com:3500/api/admin/pharmacies", { headers }),
+                fetch("https://dev.takymed.com:3500/api/categories", { headers }),
+                fetch("https://dev.takymed.com:3500/api/admin/upgrade-requests", { headers }),
+                fetch("https://dev.takymed.com:3500/api/admin/monthly-activity", { headers }),
+                fetch("https://dev.takymed.com:3500/api/admin/commercials", { headers }),
+                fetch("https://dev.takymed.com:3500/api/admin/unassigned-clients", { headers }),
             ]);
 
             if (statsRes.ok && usersRes.ok && medsRes.ok && settingsRes.ok && pharmRes.ok && catRes.ok) {
@@ -345,7 +345,7 @@ export default function AdminDashboard() {
             toast.error("Veuillez fournir un mot de passe");
             return;
         }
-        const res = await fetch("/api/admin/users", {
+        const res = await fetch("https://dev.takymed.com:3500/api/admin/users", {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -426,7 +426,7 @@ export default function AdminDashboard() {
             return;
         }
 
-        const res = await fetch("/api/admin/medications", {
+        const res = await fetch("https://dev.takymed.com:3500/api/admin/medications", {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -529,7 +529,7 @@ export default function AdminDashboard() {
 
     const handleAddCat = async () => {
         if (!newCat.name.trim()) return toast.error("Le nom est requis");
-        const res = await fetch("/api/categories", {
+        const res = await fetch("https://dev.takymed.com:3500/api/categories", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(newCat)
@@ -615,7 +615,7 @@ export default function AdminDashboard() {
     const handleReassignClient = async (newCommId: number) => {
         if (!clientToReassign) return;
         try {
-            const res = await fetch("/api/admin/reassign-client", {
+            const res = await fetch("https://dev.takymed.com:3500/api/admin/reassign-client", {
                 method: 'PATCH',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -698,7 +698,7 @@ export default function AdminDashboard() {
                 const unitId = parts[2]?.toLowerCase().includes('gélule') ? 2 : parts[2]?.toLowerCase().includes('sirop') ? 3 : 1;
                 const dose = parseFloat(parts[3] || parts[2]) || 1;
                 try {
-                    const res = await fetch("/api/admin/medications", {
+                    const res = await fetch("https://dev.takymed.com:3500/api/admin/medications", {
                         method: 'POST',
                         headers: { 
                             'Content-Type': 'application/json',

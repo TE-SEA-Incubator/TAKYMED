@@ -53,7 +53,7 @@ export default function SearchMedications() {
 
   const fetchInteractions = async () => {
     try {
-      const res = await fetch('/api/medications/interactions');
+      const res = await fetch('https://dev.takymed.com:3500/api/medications/interactions');
       if (res.ok) {
         const data = await res.json();
         setInteractions(data.interactions);

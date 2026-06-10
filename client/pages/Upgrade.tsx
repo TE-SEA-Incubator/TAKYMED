@@ -39,7 +39,7 @@ export default function Upgrade() {
   useEffect(() => {
     async function fetchAccountTypes() {
       try {
-        const res = await fetch("/api/admin/settings", {
+        const res = await fetch("https://dev.takymed.com:3500/api/admin/settings", {
           headers: { "x-user-id": user?.id?.toString() || "" }
         });
         if (res.ok) {
@@ -169,7 +169,7 @@ export default function Upgrade() {
 
   const submitUpgradeRequest = (typeName: string, motiveText?: string) => {
     if (!user?.id) return;
-    fetch("/api/auth/upgrade-request", {
+    fetch("https://dev.takymed.com:3500/api/auth/upgrade-request", {
       method: "POST",
       headers: { 
         "Content-Type": "application/json",
