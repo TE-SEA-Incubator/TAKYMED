@@ -86,7 +86,7 @@ export function createServer() {
   return greenlock.init({
     packageRoot: process.cwd(),
     configDir: './greenlock.d',
-    maintainerEmail: 'admin@takymed.com', // Remplacer par votre email
+    maintainerEmail: 'ravelnghomsi@gmail.com',
     cluster: false
   }).serve(app);
 }

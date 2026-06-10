@@ -53,3 +53,10 @@ takymed-web.zip
 server/cert/*.key
 server/cert/*.crt
 server/cert/*.pem
+
+# HTTPS & Greenlock (NE JAMAIS COMMITER)
+server/cert/*.key
+server/cert/*.crt
+server/cert/*.pem
+server/cert/*.cer
+greenlock.d/
