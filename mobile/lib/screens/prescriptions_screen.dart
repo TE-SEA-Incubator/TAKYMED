@@ -65,19 +65,23 @@ class _OrdonnancesScreenState extends State<OrdonnancesScreen> {
     try {
       final api = Provider.of<ApiService>(context, listen: false);
       final data = await api.getOrdonnances(authProvider.user!.id);
-      setState(() {
-        ordonnances = data['ordonnances'] ?? [];
-        isLoading = false;
-        errorMessage = null;
-      });
+      if (mounted) {
+        setState(() {
+          ordonnances = data['ordonnances'] ?? [];
+          isLoading = false;
+          errorMessage = null;
+        });
+      }
       if (expandedId != null) {
         await _fetchOrdonnanceDetails(expandedId!);
       }
     } catch (e) {
-      setState(() {
-        errorMessage = e.toString();
-        isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          errorMessage = e.toString();
+          isLoading = false;
+        });
+      }
     }
   }
 

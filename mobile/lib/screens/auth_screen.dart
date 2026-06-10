@@ -7,7 +7,7 @@ import '../services/auth_exception.dart';
 import '../theme/app_colors.dart';
 import '../utils/auth_phone.dart';
 import '../widgets/app_text_field.dart';
-import '../widgets/main_shell.dart';
+import '../widgets/auth_scaffold.dart';
 import '../widgets/page_transitions.dart';
 import '../widgets/primary_button.dart';
 import '../widgets/takymed_logo.dart';
@@ -144,13 +144,23 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget build(BuildContext context) {
     final isRegister = widget.mode == AuthMode.register;
 
-    return AuthScaffold(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [AppColors.primaryLight, AppColors.background],
+            stops: [0.0, 0.4],
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                children: [
               const SizedBox(height: 40),
               if (widget.mode == AuthMode.login)
                 Align(
@@ -333,7 +343,9 @@ class _AuthScreenState extends State<AuthScreen> {
           ),
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 
   @override

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import '../services/api_service.dart';
-import '../services/push_service.dart';
 import '../theme/app_colors.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/prescriptions_screen.dart';
@@ -30,14 +28,6 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     _TabItem(icon: Icons.person_rounded, label: 'Profil'),
   ];
 
-  int _mapTabToStack(int tabIndex) {
-    if (tabIndex == 0) return 0; // Home
-    if (tabIndex == 1) return 1; // Ordonnances
-    if (tabIndex == 2) return 2; // Search
-    if (tabIndex == 3) return 4; // Settings/Profile
-    return 0;
-  }
-
   void _onTabTap(int index) {
     if (index == _currentIndex) return;
     setState(() => _currentIndex = index);
@@ -50,31 +40,38 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
     return Scaffold(
       body: IndexedStack(
-        index: _mapTabToStack(_currentIndex),
+        index: _currentIndex,
         children: [
+          isCommercial
+              ? const CommercialDashboardScreen(embedded: true)
+              : const DashboardScreen(embedded: true),
+          const OrdonnancesScreen(embedded: true),
+          const SearchMedicationsScreen(embedded: true),
+          // Page profil incluant les notifications
           Scaffold(
-            appBar: AppBar(
-              title: const Text('TAKYMED', style: TextStyle(fontWeight: FontWeight.bold)),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.notifications_rounded),
-                  onPressed: () => pushSlide(context, const NotificationsScreen(embedded: true)),
+            appBar: AppBar(title: const Text('Profil')),
+            body: ListView(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.notifications_rounded),
+                  title: const Text('Notifications'),
+                  onTap: () => pushSlide(context, const NotificationsScreen(embedded: true)),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.settings_rounded),
+                  title: const Text('Paramètres'),
+                  onTap: () => pushSlide(context, const SettingsScreen(embedded: true)),
                 ),
               ],
             ),
-            body: isCommercial
-                ? const CommercialDashboardScreen(embedded: true)
-                : const DashboardScreen(embedded: true),
           ),
-          const OrdonnancesScreen(embedded: true),
-          const SearchMedicationsScreen(embedded: true),
-          const SettingsScreen(embedded: true),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => pushSlide(context, const CreatePrescriptionScreen()),
         backgroundColor: AppColors.primary,
         elevation: 4,
+        shape: const CircleBorder(),
         child: const Icon(Icons.add, size: 32, color: Colors.white),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
@@ -87,11 +84,11 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _NavItem(icon: _tabs[0].icon, label: _tabs[0].label, isSelected: _currentIndex == 0, onTap: () => _onTabTap(0)),
-              _NavItem(icon: _tabs[1].icon, label: _tabs[1].label, isSelected: _currentIndex == 1, onTap: () => _onTabTap(1)),
+              Expanded(child: _NavItem(icon: _tabs[0].icon, label: _tabs[0].label, isSelected: _currentIndex == 0, onTap: () => _onTabTap(0))),
+              Expanded(child: _NavItem(icon: _tabs[1].icon, label: _tabs[1].label, isSelected: _currentIndex == 1, onTap: () => _onTabTap(1))),
               const SizedBox(width: 40), // Space for FAB
-              _NavItem(icon: _tabs[2].icon, label: _tabs[2].label, isSelected: _currentIndex == 2, onTap: () => _onTabTap(2)),
-              _NavItem(icon: _tabs[3].icon, label: _tabs[3].label, isSelected: _currentIndex == 3, onTap: () => _onTabTap(3)),
+              Expanded(child: _NavItem(icon: _tabs[2].icon, label: _tabs[2].label, isSelected: _currentIndex == 2, onTap: () => _onTabTap(2))),
+              Expanded(child: _NavItem(icon: _tabs[3].icon, label: _tabs[3].label, isSelected: _currentIndex == 3, onTap: () => _onTabTap(3))),
             ],
           ),
         ),
