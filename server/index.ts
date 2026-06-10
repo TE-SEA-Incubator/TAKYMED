@@ -1,6 +1,8 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import fs from "fs";
+import https from "https";
 import { handleDemo } from "./routes/demo";
 import { authRouter } from "./routes/auth";
 import { prescriptionRouter } from "./routes/prescriptions";
@@ -32,7 +34,7 @@ export function createServer() {
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
   app.use(express.static("public"));
 
-  // Custom CSP Middleware to prevent Chrome DevTools and Google Translate blocking
+  // Custom CSP Middleware
   app.use((req, res, next) => {
     res.setHeader(
       "Content-Security-Policy",
@@ -71,7 +73,7 @@ export function createServer() {
   app.use("/api/pharmacies-garde", pharmaciesGardeRouter);
   app.use("/api/commercial", commercialRouter);
 
-  // Toujours renvoyer du JSON pour les routes API inconnues (évite HTML/DOCTYPE côté clients)
+  // Toujours renvoyer du JSON pour les routes API inconnues
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "Endpoint API introuvable" });
   });
@@ -81,5 +83,15 @@ export function createServer() {
   startReminderWorker();
   startPharmacyScheduler();
 
-  return app;
+  try {
+      const privateKey = fs.readFileSync('/home/TAKYMED/server/cert/_.takymed.com_private_key.key', 'utf8');
+      const certificate = fs.readFileSync('/home/TAKYMED/server/cert/intermediate1.cer', 'utf8');
+      const credentials = { key: privateKey, cert: certificate };
+      console.log("🚀 HTTPS Server initialized");
+      return https.createServer(credentials, app);
+  } catch (err) {
+      console.error("❌ Failed to initialize HTTPS, verify certificate path/files:", err);
+      // Fallback si certs manquent
+      return app;
+  }
 }
