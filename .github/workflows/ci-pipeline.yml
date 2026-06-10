@@ -26,8 +26,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Create Zip Archive
         run: |
-          # Exclure node_modules et dossiers inutiles
-          zip -r project.zip . -x "node_modules/*" ".git/*" "mobile/build/*" "client/dist/*"
+          # Exclure node_modules, dossiers inutiles et certificats
+          zip -r project.zip . -x "node_modules/*" ".git/*" "mobile/build/*" "client/dist/*" "server/cert/*"
       - uses: actions/upload-artifact@v4
         with:
           name: project-source

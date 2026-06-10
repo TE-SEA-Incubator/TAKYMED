@@ -48,3 +48,8 @@ data/auth_info_baileys/
 takymed.apk
 takymed.aab
 takymed-web.zip
+
+# Certificats SSL (NE JAMAIS COMMITER)
+server/cert/*.key
+server/cert/*.crt
+server/cert/*.pem

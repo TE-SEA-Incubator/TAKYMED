@@ -81,7 +81,16 @@ if [ -f "$SOURCE_DIR/pharmacies_cameroun.sql" ]; then
         || { echo "❌ Database import failed."; exit 1; }
 fi
 
+# 2.7 Sync SSL Certificates
+if [ -d "$SOURCE_DIR/server/cert" ]; then
+    echo "🔐 Syncing SSL certificates..."
+    rsync -av -e "$RSYNC_SSH" "$SOURCE_DIR/server/cert/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/server/cert/" \
+        || { echo "❌ Certificate synchronization failed."; exit 1; }
+    $SSH_CMD $REMOTE_USER@$REMOTE_HOST "chmod 600 $REMOTE_DIR/server/cert/*.key" || true
+fi
+
 # 3. Build on Remote
+
 echo "⚙️ Building on remote server..."
 
 $SSH_CMD $REMOTE_USER@$REMOTE_HOST "cd $REMOTE_DIR && \
