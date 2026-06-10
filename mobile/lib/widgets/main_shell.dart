@@ -66,7 +66,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => setState(() => _currentIndex = 100), // Index spécial pour Ordonnances
+        onPressed: () => pushSlide(context, const CreatePrescriptionScreen()),
         backgroundColor: AppColors.primary,
         elevation: 4,
         child: const Icon(Icons.add, size: 32, color: Colors.white),
