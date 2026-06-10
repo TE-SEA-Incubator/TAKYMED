@@ -5,8 +5,7 @@ import '../theme/app_colors.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/prescriptions_screen.dart';
 import '../screens/search_medications_screen.dart';
-import '../screens/notifications_screen.dart';
-import '../screens/settings_screen.dart';
+import '../screens/profile_screen.dart';
 import '../screens/commercial_dashboard_screen.dart';
 import '../screens/create_prescription_screen.dart';
 import 'page_transitions.dart';
@@ -47,24 +46,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
               : const DashboardScreen(embedded: true),
           const OrdonnancesScreen(embedded: true),
           const SearchMedicationsScreen(embedded: true),
-          // Page profil incluant les notifications
-          Scaffold(
-            appBar: AppBar(title: const Text('Profil')),
-            body: ListView(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.notifications_rounded),
-                  title: const Text('Notifications'),
-                  onTap: () => pushSlide(context, const NotificationsScreen(embedded: true)),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.settings_rounded),
-                  title: const Text('Paramètres'),
-                  onTap: () => pushSlide(context, const SettingsScreen(embedded: true)),
-                ),
-              ],
-            ),
-          ),
+          const ProfileScreen(),
         ],
       ),
       floatingActionButton: FloatingActionButton(
