@@ -4,16 +4,34 @@ import { searchNearbyPharmacies } from "../services/pharmacySearchService";
 
 const router = Router();
 
+// Route unifiée pour le mobile et le web
+router.get("/all", (req, res) => {
+    try {
+        // Une seule requête simple et propre
+        const pharmacies = db.prepare(`
+            SELECT id_pharmacie as id, nom_pharmacie as name, adresse as address, 
+                   telephone as phone, latitude, longitude, est_garde
+            FROM Pharmacies
+            ORDER BY id_pharmacie DESC
+        `).all();
+        res.json({ pharmacies });
+    } catch (error) {
+        console.error("Erreur API /all :", error);
+        res.status(500).json({ error: "Erreur lors de la récupération des pharmacies" });
+    }
+});
+
 // Get pharmacies owned by a specific user (Pro or Pharmacist)
-router.get("/", (req, res) => {
+router.get("/search", (req, res) => {
+
     const userId = req.query.pharmacistId || req.query.userId;
     if (!userId) return res.status(400).json({ error: "Missing userId" });
 
     try {
         const pharmacies = db.prepare(`
-            SELECT id_pharmacie as id, nom_pharmacie as name, adresse as address, telephone as phone
+            SELECT id_pharmacie as id, nom_pharmacie as name, adresse as address, telephone as phone, est_garde
             FROM Pharmacies
-            WHERE id_pharmacien = ?
+            WHERE id_pharmacien = ? OR est_garde = TRUE
         `).all(userId);
         res.json({ pharmacies });
     } catch (error) {

@@ -218,6 +218,11 @@ class _OrdonnancesScreenState extends State<OrdonnancesScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => pushSlide(context, const CreatePrescriptionScreen()),
+        backgroundColor: AppColors.primary,
+        child: const Icon(Icons.add, size: 28, color: Colors.white),
+      ),
       body: Column(
         children: [
           GradientHeader(

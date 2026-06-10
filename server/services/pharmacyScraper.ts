@@ -172,11 +172,13 @@ async function savePharmaciesToDb(
   sourceUrl: string,
   geocode = true,
 ): Promise<number> {
-  db.prepare("DELETE FROM PharmaciesGarde WHERE region = ?").run(region);
+  // On supprime les anciennes pharmacies de garde pour cette région dans la table unifiée
+  db.prepare("DELETE FROM Pharmacies WHERE est_garde = 1 AND region = ?").run(region);
 
+  // Insertion dans la table unifiée
   const stmt = db.prepare(`
-    INSERT OR REPLACE INTO PharmaciesGarde (nom, adresse, telephone, statut, region, ville, latitude, longitude, source_url, mis_a_jour_le)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    INSERT INTO Pharmacies (id_pharmacien, nom_pharmacie, telephone, adresse, latitude, longitude, est_garde, region)
+    VALUES (?, ?, ?, ?, ?, ?, 1, ?)
   `);
 
   let count = 0;
@@ -186,7 +188,6 @@ async function savePharmaciesToDb(
 
     const address = (pharmacy.address || ville).trim();
     const phone = (pharmacy.phone || "").trim();
-    const status = (pharmacy.status || "ouverte").trim();
 
     let lat: number | null = null;
     let lng: number | null = null;
@@ -198,7 +199,8 @@ async function savePharmaciesToDb(
       await sleep(1100);
     }
 
-    stmt.run(name, address, phone, status, region, ville, lat, lng, sourceUrl);
+    // id_pharmacien est fixé à 1 pour les pharmacies de garde (admin)
+    stmt.run(1, name, phone, address, lat, lng, region);
     count += 1;
   }
 

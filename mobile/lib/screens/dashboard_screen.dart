@@ -15,6 +15,7 @@ import '../widgets/stat_card.dart';
 import 'create_prescription_screen.dart';
 import 'commercial_register_screen.dart';
 import 'commercial_dashboard_screen.dart';
+import 'search_pharmacies_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final bool embedded;
@@ -261,9 +262,20 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                           ),
                         ),
                         const SizedBox(height: 12),
+                        AnimatedFadeSlide(
+                          index: 4,
+                          child: QuickActionTile(
+                            title: 'Pharmacies',
+                            subtitle: 'Trouver une pharmacie à proximité',
+                            icon: Icons.local_pharmacy_rounded,
+                            color: AppColors.secondary,
+                            onTap: () => pushSlide(context, const SearchPharmaciesScreen()),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         if (isCommercial) ...[
                           AnimatedFadeSlide(
-                            index: 4,
+                            index: 5,
                             child: QuickActionTile(
                               title: 'Tableau de bord commercial',
                               subtitle: 'Gérer vos clients',
@@ -274,7 +286,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                           ),
                           const SizedBox(height: 12),
                           AnimatedFadeSlide(
-                            index: 5,
+                            index: 6,
                             child: QuickActionTile(
                               title: 'Inscrire un client',
                               subtitle: 'Ajouter un nouveau patient',

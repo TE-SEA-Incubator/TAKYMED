@@ -105,6 +105,7 @@ export function searchNearbyPharmacies(options: {
     SELECT id_pharmacie as id, nom_pharmacie as name, adresse as address,
            telephone as phone, latitude, longitude
     FROM Pharmacies
+    WHERE est_garde = FALSE
   `,
     )
     .all() as Record<string, unknown>[];
@@ -121,18 +122,17 @@ export function searchNearbyPharmacies(options: {
     isOnDuty: false,
   }));
 
-  // --- Pharmacies de garde (cache SQLite) ---
+  // --- Pharmacies de garde (maintenant dans Pharmacies avec est_garde = TRUE) ---
   let gardeQuery = `
-    SELECT id, nom as name, adresse as address, telephone as phone,
-           statut as status, region, ville, latitude, longitude, mis_a_jour_le
-    FROM PharmaciesGarde
+    SELECT id_pharmacie as id, nom_pharmacie as name, adresse as address, telephone as phone,
+           'ouverte' as status, latitude, longitude
+    FROM Pharmacies
+    WHERE est_garde = TRUE
   `;
   const gardeParams: string[] = [];
-  if (regionFilter) {
-    gardeQuery += ` WHERE region = ?`;
-    gardeParams.push(regionFilter);
-  }
-  gardeQuery += ` ORDER BY mis_a_jour_le DESC`;
+  // Note : La notion de "région" n'est plus directement dans Pharmacies, 
+  // on simplifie la requête pour récupérer les pharmacies de garde.
+  gardeQuery += ` ORDER BY id_pharmacie DESC`;
 
   const gardeRows = db.prepare(gardeQuery).all(...gardeParams) as Record<string, unknown>[];
 
@@ -147,11 +147,7 @@ export function searchNearbyPharmacies(options: {
     type: "garde" as const,
     status: (r.status as string) || "ouverte",
     isOnDuty: true,
-    region: (r.region as string) || null,
   }));
-
-  const updatedAt =
-    gardeRows.length > 0 ? (gardeRows[0].mis_a_jour_le as string) : null;
 
   if (hasLocation) {
     const coords: Coordinates = { lat: options.lat!, lng: options.lng! };
@@ -167,6 +163,8 @@ export function searchNearbyPharmacies(options: {
     onDuty = onDuty.slice(0, limit);
     allNearby = allNearby.slice(0, limit);
   }
+
+  const updatedAt = null;
 
   return {
     location: locationInfo,

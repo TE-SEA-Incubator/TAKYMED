@@ -1,13 +1,14 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import '../utils/phone_utils.dart';
 import '../utils/auth_phone.dart';
 import 'auth_exception.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://dev.takymed.com:3500/api';
+  static const String baseUrl = 'http://82.165.150.150:3500/api';
   /// Origine du serveur (sans /api) pour les assets statiques (/uploads/...).
-  static const String serverOrigin = 'http://dev.takymed.com:3500';
+  static const String serverOrigin = 'http://82.165.150.150:3500';
 
   Map<String, dynamic> _decodeJsonMap(http.Response response) {
     try {
@@ -365,6 +366,27 @@ class ApiService {
     throw Exception(_apiErrorMessage(response, fallback: 'Recherche IA indisponible'));
   }
 
+  Future<List<dynamic>> getAllPharmacies() async {
+    final uri = Uri.parse('$baseUrl/pharmacies/all');
+    
+    try {
+      final response = await http.get(uri).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = _decodeJsonMap(response);
+        return data['pharmacies'] as List<dynamic>? ?? [];
+      } else {
+        throw Exception('Erreur serveur (${response.statusCode})');
+      }
+    } on TimeoutException {
+      throw Exception('La connexion au serveur a expiré (Timeout).');
+    } on http.ClientException catch (e) {
+      throw Exception('Erreur réseau: Impossible de joindre le serveur. $e');
+    } catch (e) {
+      throw Exception('Erreur inattendue: $e');
+    }
+  }
+
   Future<Map<String, dynamic>> getInteractions() async {
     final response = await http.get(
       Uri.parse('$baseUrl/medications/interactions'),
@@ -405,12 +427,22 @@ class ApiService {
     if (medId != null) params['medId'] = medId.toString();
 
     final uri = Uri.parse('$baseUrl/pharmacies/nearby').replace(queryParameters: params);
-    final response = await http.get(uri);
+    
+    try {
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
 
-    if (response.statusCode == 200) {
-      return _normalizeNearbyPharmacies(_decodeJsonMap(response));
+      if (response.statusCode == 200) {
+        return _normalizeNearbyPharmacies(_decodeJsonMap(response));
+      } else {
+        throw Exception('Erreur serveur (${response.statusCode}): ${response.body}');
+      }
+    } on TimeoutException {
+      throw Exception('La connexion au serveur a expiré (Timeout). Vérifiez votre connexion.');
+    } on http.ClientException catch (e) {
+      throw Exception('Erreur réseau: Impossible de joindre le serveur. $e');
+    } catch (e) {
+      throw Exception('Erreur inattendue: $e');
     }
-    throw Exception(_apiErrorMessage(response, fallback: 'Échec de la recherche de pharmacies à proximité'));
   }
 
   Future<Map<String, dynamic>> checkCommercialClientAvailability(

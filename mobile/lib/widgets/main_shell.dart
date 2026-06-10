@@ -26,42 +26,25 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
   static const _tabs = [
     _TabItem(icon: Icons.home_rounded, label: 'Accueil'),
-    _TabItem(icon: Icons.description_rounded, label: 'Ordonnances'),
     _TabItem(icon: Icons.search_rounded, label: 'Recherche'),
     _TabItem(icon: Icons.notifications_rounded, label: 'Alertes'),
     _TabItem(icon: Icons.person_rounded, label: 'Profil'),
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _navController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) => _initPush());
+  // Helper pour mapper l'index du tab vers l'index de l'IndexedStack
+  // Tabs: 0:Home, 1:Search, 2:Alerts, 3:Profile
+  // Stack: 0:Home, 1:Search, 2:Alerts, 3:Profile, 4:Ordonnances (via FAB)
+  int _mapTabToStack(int tabIndex) {
+    if (tabIndex == 0) return 0;
+    if (tabIndex == 1) return 2;
+    if (tabIndex == 2) return 3;
+    if (tabIndex == 3) return 4;
+    return 0;
   }
-
-  Future<void> _initPush() async {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final api = Provider.of<ApiService>(context, listen: false);
-    if (auth.user == null) return;
-    await PushService.requestPermission();
-    await PushService.registerDevice(api, auth.user!.id);
-    await PushService.startPolling(api, auth.user!.id);
-  }
-
-  @override
-  void dispose() {
-    PushService.stopPolling();
-    _navController.dispose();
-    super.dispose();
-  }
-
+  
   void _onTabTap(int index) {
     if (index == _currentIndex) return;
     setState(() => _currentIndex = index);
-    _navController.forward(from: 0);
   }
 
   @override
@@ -71,52 +54,37 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
     return Scaffold(
       body: IndexedStack(
-        index: _currentIndex,
+        index: _currentIndex == 100 ? 1 : _mapTabToStack(_currentIndex),
         children: [
           isCommercial
               ? const CommercialDashboardScreen(embedded: true)
               : const DashboardScreen(embedded: true),
-          const OrdonnancesScreen(embedded: true),
-          const SearchMedicationsScreen(embedded: true),
-          const NotificationsScreen(embedded: true),
-          const SettingsScreen(embedded: true),
+          const OrdonnancesScreen(embedded: true), // Index 1
+          const SearchMedicationsScreen(embedded: true), // Index 2
+          const NotificationsScreen(embedded: true), // Index 3
+          const SettingsScreen(embedded: true), // Index 4
         ],
       ),
-      floatingActionButton: _currentIndex == 1
-          ? FloatingActionButton.extended(
-              onPressed: () => pushSlide(context, const CreatePrescriptionScreen()),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Nouveau rappel'),
-            )
-          : null,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.foreground.withValues(alpha: 0.06),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => setState(() => _currentIndex = 100), // Index spécial pour Ordonnances
+        backgroundColor: AppColors.primary,
+        elevation: 4,
+        child: const Icon(Icons.add, size: 32, color: Colors.white),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      bottomNavigationBar: BottomAppBar(
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 8,
+        color: AppColors.surface,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _NavItem(icon: _tabs[0].icon, label: _tabs[0].label, isSelected: _currentIndex == 0, onTap: () => _onTabTap(0)),
+            _NavItem(icon: _tabs[1].icon, label: _tabs[1].label, isSelected: _currentIndex == 1, onTap: () => _onTabTap(1)),
+            const SizedBox(width: 40), // Espace pour le FAB
+            _NavItem(icon: _tabs[2].icon, label: _tabs[2].label, isSelected: _currentIndex == 2, onTap: () => _onTabTap(2)),
+            _NavItem(icon: _tabs[3].icon, label: _tabs[3].label, isSelected: _currentIndex == 3, onTap: () => _onTabTap(3)),
           ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(_tabs.length, (index) {
-                final tab = _tabs[index];
-                final isSelected = _currentIndex == index;
-                return _NavItem(
-                  icon: tab.icon,
-                  label: tab.label,
-                  isSelected: isSelected,
-                  onTap: () => _onTabTap(index),
-                );
-              }),
-            ),
-          ),
         ),
       ),
     );

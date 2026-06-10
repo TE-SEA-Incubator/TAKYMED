@@ -72,8 +72,18 @@ if [ -f "$SOURCE_DIR/.env" ]; then
     $SSH_CMD $REMOTE_USER@$REMOTE_HOST "chmod 600 $REMOTE_DIR/.env" || true
 fi
 
+# 2.6 Sync SQL Data and Import
+if [ -f "$SOURCE_DIR/pharmacies_cameroun.sql" ]; then
+    echo "🗄️ Syncing and importing pharmacy data..."
+    rsync -av -e "$RSYNC_SSH" "$SOURCE_DIR/pharmacies_cameroun.sql" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/pharmacies_cameroun.sql"
+
+    $SSH_CMD $REMOTE_USER@$REMOTE_HOST "cd $REMOTE_DIR && sqlite3 bd.sqlite < pharmacies_cameroun.sql" \
+        || { echo "❌ Database import failed."; exit 1; }
+fi
+
 # 3. Build on Remote
-echo "�️ Building on remote server..."
+echo "⚙️ Building on remote server..."
+
 $SSH_CMD $REMOTE_USER@$REMOTE_HOST "cd $REMOTE_DIR && \
     NODE_VER=\$(node -v | cut -d. -f1 | sed 's/v//') && \
     if [ \"\$NODE_VER\" -lt 20 ]; then \

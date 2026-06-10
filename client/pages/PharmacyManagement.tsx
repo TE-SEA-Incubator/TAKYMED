@@ -28,6 +28,7 @@ interface Pharmacy {
   phone: string;
   openTime: string;
   closeTime: string;
+  est_garde: boolean;
   stocks: { medId: number; medName: string; quantity: number }[];
 }
 
@@ -435,7 +436,12 @@ export default function PharmacyManagement() {
                       <Store className="w-8 h-8 font-black" />
                     </div>
                     <div>
-                      <h3 className="text-2xl font-black tracking-tight">{p.name}</h3>
+                      <h3 className="text-2xl font-black tracking-tight flex items-center gap-2">
+                        {p.name}
+                        {p.est_garde && (
+                          <span className="text-[10px] bg-amber-500 text-white px-2 py-0.5 rounded-full uppercase tracking-widest font-black">Garde</span>
+                        )}
+                      </h3>
                       <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium mt-1">
                         <MapPin className="w-3.5 h-3.5 text-primary" />
                         {p.address}
