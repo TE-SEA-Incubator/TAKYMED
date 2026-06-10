@@ -1,18 +1,13 @@
-# TAKYMED — Hébergement statique IONOS (takymed.com)
+RewriteEngine On
+RewriteBase /
 
-<IfModule mod_rewrite.c>
-  RewriteEngine On
-  RewriteBase /
+# 1. Redirection explicite des requêtes /api vers le proxy PHP avec path
+RewriteRule ^api/(.*)$ /api_proxy.php?path=$1 [QSA,L]
 
-  # 1. Redirection explicite des requêtes /api vers le proxy PHP
-  # On capture tout ce qui suit /api/ pour le passer au script
-  RewriteRule ^api/(.*)$ /api_proxy.php [QSA,L]
+# 2. Fichiers statiques existants
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
 
-  # 2. Fichiers statiques existants (assets, sw.js, favicon…)
-  RewriteCond %{REQUEST_FILENAME} -f [OR]
-  RewriteCond %{REQUEST_FILENAME} -d
-  RewriteRule ^ - [L]
-
-  # 3. React Router — toutes les autres URLs → index.html
-  RewriteRule ^ index.html [L]
-</IfModule>
+# 3. React Router
+RewriteRule ^ index.html [L]
