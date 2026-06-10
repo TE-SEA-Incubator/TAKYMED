@@ -85,7 +85,7 @@ export function createServer() {
 
   try {
       const privateKey = fs.readFileSync('/home/TAKYMED/server/cert/_.takymed.com_private_key.key', 'utf8');
-      const certificate = fs.readFileSync('/home/TAKYMED/server/cert/intermediate1.cer', 'utf8');
+      const certificate = fs.readFileSync('/home/TAKYMED/server/cert/takymed.com_ssl_certificate.cer', 'utf8');
       const credentials = { key: privateKey, cert: certificate };
       console.log("🚀 HTTPS Server initialized");
       return https.createServer(credentials, app);
