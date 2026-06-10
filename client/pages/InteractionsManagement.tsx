@@ -44,7 +44,7 @@ export default function InteractionsManagement() {
 
     const fetchInteractions = async () => {
         try {
-            const res = await fetch('http://dev.takymed.com/api/medications/interactions');
+            const res = await fetch('https://dev.takymed.com/api/medications/interactions');
             if (res.ok) {
                 const data = await res.json();
                 setInteractions(data.interactions);
@@ -58,7 +58,7 @@ export default function InteractionsManagement() {
 
     const fetchMedications = async () => {
         try {
-            const res = await fetch('http://dev.takymed.com/api/medications');
+            const res = await fetch('https://dev.takymed.com/api/medications');
             if (res.ok) {
                 const data = await res.json();
                 setDbMedications(data.medications);
@@ -75,7 +75,7 @@ export default function InteractionsManagement() {
         }
 
         try {
-            const res = await fetch('http://dev.takymed.com/api/medications/interactions', {
+            const res = await fetch('https://dev.takymed.com/api/medications/interactions', {
                 method: "POST",
                 headers: { 
                     "Content-Type": "application/json",

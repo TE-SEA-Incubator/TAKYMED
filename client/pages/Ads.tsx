@@ -35,7 +35,7 @@ export default function Ads() {
   useEffect(() => {
     async function fetchNewMeds() {
       try {
-        const res = await fetch("http://dev.takymed.com/api/medications?new=true");
+        const res = await fetch("https://dev.takymed.com/api/medications?new=true");
         if (res.ok) {
           const data = await res.json();
           setNewMedications(data.medications);

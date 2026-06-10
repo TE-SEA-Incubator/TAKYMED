@@ -43,7 +43,7 @@ export default function Checkout() {
   useEffect(() => {
     async function fetchAccountTypes() {
       try {
-        const res = await fetch("http://dev.takymed.com/api/admin/settings", {
+        const res = await fetch("https://dev.takymed.com/api/admin/settings", {
           headers: { "x-user-id": user?.id?.toString() || "" }
         });
         if (res.ok) {
@@ -65,7 +65,7 @@ export default function Checkout() {
 
     async function fetchCountries() {
       try {
-        const res = await fetch('http://dev.takymed.com/api/countries');
+        const res = await fetch('https://dev.takymed.com/api/countries');
         if (res.ok) {
           const data = await res.json();
           setCountries(data.countries || []);
@@ -90,7 +90,7 @@ export default function Checkout() {
 
     setProcessing(true);
     try {
-      const res = await fetch("http://dev.takymed.com/api/payments/send-otp", {
+      const res = await fetch("https://dev.takymed.com/api/payments/send-otp", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -136,7 +136,7 @@ export default function Checkout() {
     setProcessing(true);
 
     try {
-      const res = await fetch("http://dev.takymed.com/api/payments/process", {
+      const res = await fetch("https://dev.takymed.com/api/payments/process", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",

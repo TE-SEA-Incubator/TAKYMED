@@ -41,7 +41,7 @@ export default function Dashboard() {
     async function fetchPrescriptions() {
       if (!user?.id) return;
       try {
-        let url = `http://dev.takymed.com/api/prescriptions?userId=${user.id}`;
+        let url = `https://dev.takymed.com/api/prescriptions?userId=${user.id}`;
         if (selectedPatientId) {
           url += `&patientId=${selectedPatientId}`;
         }
@@ -68,7 +68,7 @@ export default function Dashboard() {
     try {
       const endpoint = isTaken ? "take" : "untake";
       const res = await fetch(
-        `http://dev.takymed.com/api/prescriptions/doses/${doseId}/${endpoint}`,
+        `https://dev.takymed.com/api/prescriptions/doses/${doseId}/${endpoint}`,
         { method: "POST" },
       );
       if (!res.ok) throw new Error("Error updating dose status");
@@ -77,8 +77,8 @@ export default function Dashboard() {
 
       // Refresh data
       const url = selectedPatientId
-        ? `http://dev.takymed.com/api/prescriptions?userId=${user?.id}&patientId=${selectedPatientId}`
-        : `http://dev.takymed.com/api/prescriptions?userId=${user?.id}`;
+        ? `https://dev.takymed.com/api/prescriptions?userId=${user?.id}&patientId=${selectedPatientId}`
+        : `https://dev.takymed.com/api/prescriptions?userId=${user?.id}`;
       const refreshRes = await fetch(url);
       if (refreshRes.ok) {
         const data = await refreshRes.json();
@@ -93,7 +93,7 @@ export default function Dashboard() {
 
   const handleDelayMedication = async (doseId: number) => {
     try {
-      const res = await fetch(`http://dev.takymed.com/api/prescriptions/doses/${doseId}/delay`, {
+      const res = await fetch(`https://dev.takymed.com/api/prescriptions/doses/${doseId}/delay`, {
         method: "POST",
       });
       if (!res.ok) throw new Error("Error delaying dose");
@@ -109,7 +109,7 @@ export default function Dashboard() {
     if (!newName || newName === user?.name) return;
 
     try {
-      const res = await fetch("http://dev.takymed.com/api/auth/profile", {
+      const res = await fetch("https://dev.takymed.com/api/auth/profile", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -1282,7 +1282,7 @@ function DashboardSecurityCard({ user }: { user: any }) {
     const fetchPinInfo = async () => {
       if (!user?.id) return;
       try {
-        const res = await fetch("http://dev.takymed.com/api/auth/pin-info", {
+        const res = await fetch("https://dev.takymed.com/api/auth/pin-info", {
           headers: {
             "x-user-id": user.id.toString(),
           },
@@ -1309,7 +1309,7 @@ function DashboardSecurityCard({ user }: { user: any }) {
 
     setIsLoading(true);
     try {
-      const res = await fetch("http://dev.takymed.com/api/auth/regenerate-pin", {
+      const res = await fetch("https://dev.takymed.com/api/auth/regenerate-pin", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
