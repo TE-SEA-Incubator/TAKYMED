@@ -109,7 +109,7 @@ export default function Dashboard() {
     if (!newName || newName === user?.name) return;
 
     try {
-      const res = await fetch("https://dev.takymed.com:3500/api/auth/profile", {
+      const res = await fetch("https://dev.takymed.com/api/auth/profile", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -1282,7 +1282,7 @@ function DashboardSecurityCard({ user }: { user: any }) {
     const fetchPinInfo = async () => {
       if (!user?.id) return;
       try {
-        const res = await fetch("https://dev.takymed.com:3500/api/auth/pin-info", {
+        const res = await fetch("https://dev.takymed.com/api/auth/pin-info", {
           headers: {
             "x-user-id": user.id.toString(),
           },
@@ -1309,7 +1309,7 @@ function DashboardSecurityCard({ user }: { user: any }) {
 
     setIsLoading(true);
     try {
-      const res = await fetch("https://dev.takymed.com:3500/api/auth/regenerate-pin", {
+      const res = await fetch("https://dev.takymed.com/api/auth/regenerate-pin", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

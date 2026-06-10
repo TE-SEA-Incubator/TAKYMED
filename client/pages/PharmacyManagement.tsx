@@ -68,7 +68,7 @@ export default function PharmacyManagement() {
     }
   }, [user]);
 
-const API_BASE = "https://dev.takymed.com:3500/api";
+const API_BASE = "https://dev.takymed.com/api";
 
 // ... (dans fetchPharmacies)
   const fetchPharmacies = async () => {
@@ -88,7 +88,7 @@ const API_BASE = "https://dev.takymed.com:3500/api";
 
   const fetchMedications = async () => {
     try {
-      const res = await fetch('https://dev.takymed.com:3500/api/medications');
+      const res = await fetch('https://dev.takymed.com/api/medications');
       if (res.ok) {
         const data = await res.json();
         setDbMedications(data.medications);
@@ -129,7 +129,7 @@ const API_BASE = "https://dev.takymed.com:3500/api";
         longitude: selectedCoords?.lng
       };
 
-      const res = await fetch('https://dev.takymed.com:3500/api/pharmacies', {
+      const res = await fetch('https://dev.takymed.com/api/pharmacies', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)

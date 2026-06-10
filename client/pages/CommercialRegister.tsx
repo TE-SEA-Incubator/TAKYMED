@@ -114,7 +114,7 @@ export default function CommercialRegister() {
   useEffect(() => {
     async function fetchMeds() {
       try {
-        const res = await fetch('https://dev.takymed.com:3500/api/medications');
+        const res = await fetch('https://dev.takymed.com/api/medications');
         if (res.ok) {
           const data = await res.json();
           setDbMedications(data.medications);
@@ -126,7 +126,7 @@ export default function CommercialRegister() {
 
     async function fetchInteractions() {
       try {
-        const res = await fetch('https://dev.takymed.com:3500/api/medications/interactions');
+        const res = await fetch('https://dev.takymed.com/api/medications/interactions');
         if (res.ok) {
           const data = await res.json();
           setInteractions(data.interactions);
@@ -138,7 +138,7 @@ export default function CommercialRegister() {
 
     async function fetchCategories() {
       try {
-        const res = await fetch('https://dev.takymed.com:3500/api/categories');
+        const res = await fetch('https://dev.takymed.com/api/categories');
         if (res.ok) {
           const data = await res.json();
           setCategories(data.categories);
@@ -150,7 +150,7 @@ export default function CommercialRegister() {
 
     async function fetchCountries() {
       try {
-        const res = await fetch('https://dev.takymed.com:3500/api/countries');
+        const res = await fetch('https://dev.takymed.com/api/countries');
         if (res.ok) {
           const data = await res.json();
           setCountries(data.countries);
@@ -300,7 +300,7 @@ export default function CommercialRegister() {
       const dialCode = countries.find(c => c.code === selectedCountry)?.dialCode || "+237";
       const fullPhone = `${dialCode}${clientInfo.phone.replace(/\s+/g, '')}`;
 
-      const res = await fetch("https://dev.takymed.com:3500/api/commercial/register-client", {
+      const res = await fetch("https://dev.takymed.com/api/commercial/register-client", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -349,7 +349,7 @@ export default function CommercialRegister() {
       const dialCode = countries.find(c => c.code === selectedCountry)?.dialCode || "+237";
       const fullPhone = `${dialCode}${clientInfo.phone.replace(/\s+/g, '')}`;
 
-      const res = await fetch("https://dev.takymed.com:3500/api/commercial/validate-client", {
+      const res = await fetch("https://dev.takymed.com/api/commercial/validate-client", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",

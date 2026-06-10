@@ -83,15 +83,7 @@ export function createServer() {
   startReminderWorker();
   startPharmacyScheduler();
 
-  try {
-      const privateKey = fs.readFileSync('/home/TAKYMED/server/cert/_.takymed.com_private_key.key', 'utf8');
-      const certificate = fs.readFileSync('/home/TAKYMED/server/cert/takymed.com_ssl_certificate.cer', 'utf8');
-      const credentials = { key: privateKey, cert: certificate };
-      console.log("🚀 HTTPS Server initialized");
-      return https.createServer(credentials, app);
-  } catch (err) {
-      console.error("❌ Failed to initialize HTTPS, verify certificate path/files:", err);
-      // Fallback si certs manquent
-      return app;
-  }
+  // Mode HTTP Simple (Caddy gérera le HTTPS)
+  console.log("🚀 Server running in HTTP mode (HTTPS managed by Caddy)");
+  return app;
 }
