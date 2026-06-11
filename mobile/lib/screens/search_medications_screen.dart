@@ -52,14 +52,11 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
     super.initState();
     _fetchInteractions();
     _loadBookmarks();
-    _searchController.addListener(_onSearchChanged);
     _pharmacyFilterController.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
-    _debounce?.cancel();
-    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _pharmacyFilterController.dispose();
     super.dispose();
@@ -113,12 +110,8 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
     }
   }
 
-  void _onSearchChanged() {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), () => _runSearch());
-  }
-
-  Future<void> _runSearch() async {
+  // Manual search trigger
+  Future<void> _runSearch({bool isRetry = false}) async {
     if (!mounted) return;
     final query = _searchController.text.trim();
 
@@ -128,23 +121,34 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
         _medications = [];
         _selectedMed = null;
         _aiResult = null;
-        _pharmacies = [];
       });
       return;
     }
 
     setState(() {
-      _loading = true;
+      if (!isRetry) _loading = true;
       _selectedMed = null;
       _aiResult = null;
-      _pharmacies = [];
     });
 
     try {
       final api = Provider.of<ApiService>(context, listen: false);
       final data = await api.searchMedications(query);
       final raw = (data['medications'] as List<dynamic>?) ?? [];
-      if (!mounted || _searchController.text.trim() != query) return;
+      
+      if (raw.isEmpty && !isRetry) {
+        // Fallback to AI silently
+        try {
+            await api.searchMedicationWithAI(query);
+        } catch (e) {
+            debugPrint('AI fallback failed: $e');
+        }
+        // Retry search from DB after AI persistent insertion
+        _runSearch(isRetry: true);
+        return;
+      }
+      
+      if (!mounted) return;
       setState(() {
         _medications = raw.take(_maxResults).toList();
       });
@@ -152,7 +156,7 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
       if (!mounted) return;
       setState(() => _medications = []);
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && !isRetry) setState(() => _loading = false);
     }
   }
 
@@ -895,11 +899,17 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                     child: TextField(
                       controller: _searchController,
                       style: const TextStyle(fontSize: 18),
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: (_) => _runSearch(),
                       decoration: const InputDecoration(
                         hintText: 'Rechercher un médicament…',
                         border: InputBorder.none,
                       ),
                     ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.search_rounded),
+                    onPressed: () => _runSearch(),
                   ),
                   if (_loading)
                     const Padding(

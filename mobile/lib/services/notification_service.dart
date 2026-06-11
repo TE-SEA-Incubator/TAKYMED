@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -87,9 +86,9 @@ class NotificationService {
     return true;
   }
 
-  static NotificationDetails _details(NativeNotificationKind kind) {
+  static NotificationDetails _details(NativeNotificationKind kind, {String body = ''}) {
     if (kind == NativeNotificationKind.reminder) {
-      return const NotificationDetails(
+      return NotificationDetails(
         android: AndroidNotificationDetails(
           reminderChannelId,
           'Rappels médicaments',
@@ -100,9 +99,9 @@ class NotificationService {
           fullScreenIntent: true,
           visibility: NotificationVisibility.public,
           ticker: 'Rappel TAKYMED',
-          styleInformation: BigTextStyleInformation(''),
+          styleInformation: BigTextStyleInformation(body),
         ),
-        iOS: DarwinNotificationDetails(
+        iOS: const DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
@@ -112,7 +111,7 @@ class NotificationService {
       );
     }
 
-    return const NotificationDetails(
+    return NotificationDetails(
       android: AndroidNotificationDetails(
         messageChannelId,
         'Messages TAKYMED',
@@ -120,9 +119,9 @@ class NotificationService {
         importance: Importance.high,
         priority: Priority.high,
         category: AndroidNotificationCategory.message,
-        styleInformation: BigTextStyleInformation(''),
+        styleInformation: BigTextStyleInformation(body),
       ),
-      iOS: DarwinNotificationDetails(
+      iOS: const DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
@@ -139,40 +138,13 @@ class NotificationService {
     String? payload,
   }) async {
     await initialize();
-    final details = _details(kind);
-
-    AndroidNotificationDetails? androidDetails = details.android;
-    if (androidDetails != null && kind == NativeNotificationKind.message) {
-      androidDetails = AndroidNotificationDetails(
-        androidDetails.channelId,
-        androidDetails.channelName,
-        channelDescription: androidDetails.channelDescription,
-        importance: androidDetails.importance,
-        priority: androidDetails.priority,
-        category: androidDetails.category,
-        styleInformation: BigTextStyleInformation(body),
-      );
-    } else if (androidDetails != null && kind == NativeNotificationKind.reminder) {
-      androidDetails = AndroidNotificationDetails(
-        androidDetails.channelId,
-        androidDetails.channelName,
-        channelDescription: androidDetails.channelDescription,
-        importance: androidDetails.importance,
-        priority: androidDetails.priority,
-        category: androidDetails.category,
-        fullScreenIntent: true,
-        styleInformation: BigTextStyleInformation(body),
-      );
-    }
+    final details = _details(kind, body: body);
 
     await flutterLocalNotificationsPlugin.show(
       id,
       title,
       body,
-      NotificationDetails(
-        android: androidDetails,
-        iOS: details.iOS,
-      ),
+      details,
       payload: payload,
     );
   }
@@ -194,7 +166,7 @@ class NotificationService {
       title,
       body,
       tzDate,
-      _details(NativeNotificationKind.reminder),
+      _details(NativeNotificationKind.reminder, body: body),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
       payload: payload,

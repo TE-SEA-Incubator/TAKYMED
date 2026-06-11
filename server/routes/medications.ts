@@ -161,6 +161,22 @@ Si le médicament est inconnu, retourne uniquement: {"error":"Médicament inconn
                 return res.status(404).json({ error: parsed.error });
             }
 
+            // Automatically persist to DB
+            try {
+                db.prepare(`
+                    INSERT OR IGNORE INTO Medicaments (nom, description, prix, type_utilisation, precaution_alimentaire, date_ajout)
+                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                `).run(
+                    parsed.name,
+                    parsed.description,
+                    parsed.price || '',
+                    parsed.category?.toLowerCase() || 'comprime',
+                    parsed.precautions || 'aucune'
+                );
+            } catch (dbErr) {
+                console.error("Failed to persist AI result:", dbErr);
+            }
+
             res.json({ aiResult: parsed, fromAI: true });
         } catch (e) {
             console.error("Failed to parse AI response:", text);

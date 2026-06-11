@@ -340,10 +340,16 @@ export default function SearchMedications() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t("search.searchPlaceholder")}
               className="h-14 border-none bg-transparent text-xl focus-visible:ring-0"
+              onKeyDown={(e) => e.key === 'Enter' && handleManualSearch()}
             />
-            {loading && (
-              <div className="mr-4 h-5 w-5 animate-spin rounded-full border-b-2 border-primary" />
-            )}
+            <Button
+              className="rounded-2xl h-10 px-6 font-bold"
+              style={{ background: `linear-gradient(135deg, ${TEAL}, ${EMERALD})` }}
+              onClick={handleManualSearch}
+              disabled={loading}
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Rechercher"}
+            </Button>
           </div>
 
           <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">

@@ -669,11 +669,11 @@ class _AddMedicationFormState extends State<AddMedicationForm> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Personnalisation (Mode manuel)',
+                            'Je choisi de paramétrer mes horaires',
                             style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
                           ),
                           Text(
-                            'Définir chaque heure manuellement',
+                            'sans respecter les intervalles de prises',
                             style: TextStyle(fontSize: 10, color: AppColors.mutedForeground),
                           ),
                         ],
