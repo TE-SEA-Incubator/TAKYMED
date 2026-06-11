@@ -2,80 +2,76 @@
   <img src="mobile/assets/images/takymed.png" alt="TAKYMED Logo" width="200" />
 </p>
 
-# 🏥 TAKYMED
+# 🏥 TAKYMED - Écosystème de Santé Intelligente
 
-**TAKYMED** est une application full-stack (Web, Mobile, Backend) conçue pour la gestion complète des pharmacies, ordonnances, rappels de prises de médicaments, et la recherche de médicaments. 
-Elle offre une plateforme multi-rôles adaptée aux patients, aux professionnels de santé, et aux gestionnaires de pharmacies.
-
----
-
-## 🎯 Fonctionnalités principales
-
-- **👤 Gestion d'ordonnances intelligente** : Création d'ordonnances avec **plusieurs médicaments**, configuration des doses et durées.
-- **⏰ Automatisation des rappels** : 
-  - Calcul automatique des heures de prise (ex: 2x/jour = +12h, 3x/jour = +8h).
-  - **Mode Manuel (Personnalisation)** : Possibilité de définir chaque heure précisément si besoin.
-  - Notifications via **Push (Mobile)**, **WhatsApp**, **SMS**, et **Appels téléphoniques**.
-- **📊 Système d'abonnement avancé** : 
-  - Offres **Standard**, **Professionnel** et **Commercial**.
-  - Gestion des demandes d'upgrade avec **motif obligatoire** et validation par l'administrateur.
-- **💊 Catalogue de médicaments dynamique** : Recherche instantanée et consultation détaillée des produits (stocks, interactions, précautions).
-- **🏪 Recherche de pharmacies optimisée** : 
-  - Localisation des pharmacies de garde et des officines ayant le médicament recherché **en stock**.
-  - Intégration Google Maps et tri par distance (formule Haversine).
-- **🔐 Authentification sécurisée** : Connexion via numéro de téléphone + PIN. Procédure de **récupération de PIN par SMS**.
-- **📱 Interfaces Multiplateformes** : 
-  - **Web** (Dashboard complet pour les professionnels et pharmaciens).
-  - **Mobile** (Application compagnon pour patients et commerciaux).
+**TAKYMED** est une plateforme intégrée (Full-Stack) visant à révolutionner l'observance thérapeutique et l'accès aux médicaments au Cameroun. Le projet orchestre une synergie entre patients, professionnels de santé, pharmaciens et agents commerciaux via une infrastructure robuste et évolutive.
 
 ---
 
-## 🛠️ Stack Technologique
+## 🎯 Vision et Objectifs
+Le système TAKYMED repose sur trois piliers fondamentaux :
+1.  **Observance Thérapeutique** : Lutter contre l'oubli de médicaments grâce à un moteur de rappels automatisé et multi-canal.
+2.  **Démocratisation de l'accès** : Localiser en temps réel les pharmacies disposant du stock exact requis via une recherche géospatiale.
+3.  **Gestion Commerciale B2B2C** : Permettre aux agents commerciaux de suivre leur portefeuille de patients et de faciliter la digitalisation des prescriptions.
 
-### 💻 Frontend Web (React)
-- **React 18** avec **TypeScript**.
-- **Vite** comme outil de build.
-- **TailwindCSS** & **shadcn/ui** pour le design.
+---
 
-### 📱 Frontend Mobile (Flutter)
-- **Flutter 3.x** pour Android & iOS.
-- **Provider** pour la gestion d'état.
-- Animations fluides via `flutter_animate`.
+## 🏗️ Architecture du Projet
 
-### ⚙️ Backend (Node.js)
-- **Express.js** en **TypeScript**.
-- **SQLite** avec `better-sqlite3`.
-- Gestion automatisée des tâches (Cron) pour les rappels.
+Le projet est conçu en trois couches distinctes pour assurer performance, sécurité et maintenabilité :
+
+### 1. Couche Frontend (Multi-plateforme)
+- **Web SPA (Single Page Application)** : Développée en **React 18** + **TypeScript**. Offre un tableau de bord complet aux professionnels.
+- **Mobile (Native)** : Développée en **Flutter**. Offre une expérience fluide aux patients (notifications, recherche) et aux commerciaux (suivi des clients).
+
+### 2. Couche Backend (Node.js API)
+- **Serveur REST** : Basé sur **Express.js** en TypeScript. Centralise la logique métier.
+- **Base de données** : **SQLite** (via `better-sqlite3`), optimisée pour des requêtes rapides et une gestion de fichiers locale.
+- **Moteur de Tâches** : Système de *Cron Worker* personnalisé (géré par PM2) pour le traitement asynchrone des rappels.
+
+### 3. Couche Infrastructure (Le Pont Web)
+Pour garantir la compatibilité sur les serveurs mutualisés (où l'accès direct aux ports Node.js est souvent limité), nous utilisons un **Proxy Hybride** :
+- **`public/.htaccess`** : Gère les réécritures d'URL pour que les routes React soient servies correctement par le serveur web (Apache), tout en redirigeant les requêtes `/api` vers le proxy.
+- **`public/api_proxy.php`** : Agit comme une passerelle sécurisée. Le Frontend Web envoie ses requêtes à ce fichier PHP, qui les relaie vers le port Node.js interne. Cela permet de centraliser les CORS, d'ajouter des couches de sécurité supplémentaires et de masquer l'infrastructure backend.
+
+---
+
+## 🚀 Fonctionnalités Clés
+
+### Automatisation des Rappels
+Le système ne se contente pas de déclencher des alertes. Il calcule dynamiquement les prises :
+- **Logique auto** : Saisie d'une fréquence (ex: 3 fois/jour) + heure de début = génération automatique du calendrier complet.
+- **Flexibilité** : Mode manuel ("Personnalisation") pour définir des heures spécifiques hors du standard.
+- **Robustesse** : Le moteur de scan vérifie quotidiennement les rappels manqués (panne, serveur éteint) et les rattrape.
+
+### Recherche & Disponibilité
+- **Tri Géospatial** : Calcul de distance réelle via formule Haversine pour localiser les pharmacies à proximité.
+- **Stock Intégré** : La recherche filtre dynamiquement les pharmacies qui possèdent le médicament en stock.
+
+### Gestion d'Abonnement
+- **Workflow Admin** : Passage entre les formules (Standard, Pro, Commercial) avec soumission de motif et validation par l'administrateur.
 
 ---
 
 ## 📋 Prérequis
-
 - **Node.js** >= 18.x
 - **Flutter SDK**
 - **SQLite3**
+- **PM2** (pour la gestion du processus serveur)
 
 ---
 
-## 🚀 Installation et démarrage
+## 🛠️ Installation et Démarrage
 
-### 1. Cloner le repository
-```bash
-git clone https://github.com/Archlord12345/TAKYMED.git
-cd TAKYMED
-```
-
-### 2. Installer les dépendances
+### Backend & Web
 ```bash
 npm install
+npm run dev # Développement
+npm run build:full # Production
+npm start # Lancement via PM2
 ```
 
-### 3. Lancer en développement
-```bash
-npm run dev
-```
-
-### 4. Lancer l'application Mobile
+### Mobile
 ```bash
 cd mobile
 flutter pub get
@@ -84,24 +80,17 @@ flutter run
 
 ---
 
-## 🌐 Déploiement
-
-L'application utilise PM2 pour le maintien en ligne sur serveur Linux.
-Des scripts automatisés sont disponibles :
-- `./scripts/push.sh` : Envoie les modifications et reconstruit le projet sur le serveur distant.
-
----
-
-## 🔐 Comptes de test
-
-| Type | Identifiant | PIN | Rôle |
-|------|-------------|-----|------|
-| **Standard** | `+237 600000001` | `1234` | Patient |
-| **Professionnel** | `+237 612345678` | `1234` | Médecin / Pharmacien |
-| **Commercial** | `+237 655555555` | `1234` | Agent commercial |
-| **Administrateur** | *Env config* | *...* | Admin système |
+## 🔐 Configuration des rôles (Auto-détection)
+| Type | Identifiant (Téléphone) | PIN |
+|------|--------------------------|-----|
+| **Patient** | `+237 600000001` | `1234` |
+| **Médecin/Pharma**| `+237 612345678` | `1234` |
+| **Commercial** | `+237 655555555` | `1234` |
 
 ---
 
-**TAKYMED** - *Votre santé entre de bonnes mains.*
-Dernière mise à jour: Juin 2026
+## 🤝 Contribution
+Le développement suit une architecture de **modèles partagés** (`shared/api.ts`) pour garantir la cohérence des données entre le client et le serveur. Toute nouvelle fonctionnalité doit être typée et testée.
+
+**TAKYMED** - *La technologie au service de la santé.*
+Dernière mise à jour : Juin 2026
