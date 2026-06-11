@@ -12,6 +12,8 @@ import '../widgets/app_text_field.dart';
 import '../widgets/gradient_header.dart';
 import '../utils/app_version.dart';
 import '../widgets/primary_button.dart';
+import '../widgets/page_transitions.dart';
+import 'upgrade_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final bool embedded;
@@ -282,6 +284,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 ),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 16),
+                          OutlinedButton.icon(
+                            onPressed: () => pushSlide(context, const UpgradeScreen()),
+                            icon: const Icon(Icons.upgrade_rounded, color: AppColors.primary),
+                            label: const Text('Changer de formule', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: AppColors.primary),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              minimumSize: const Size(double.infinity, 44),
+                            ),
                           ),
                           const SizedBox(height: 24),
                           AppTextField(

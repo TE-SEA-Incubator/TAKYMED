@@ -132,6 +132,76 @@ class _CommercialDashboardScreenState extends State<CommercialDashboardScreen> {
     }
   }
 
+  Future<void> sendMessage(int clientId, String clientName) async {
+    final controller = TextEditingController();
+    final sent = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        bool sending = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: Text('Message à $clientName'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controller,
+                    maxLines: 4,
+                    decoration: InputDecoration(
+                      hintText: 'Votre message...',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                      filled: true,
+                      fillColor: AppColors.surface,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Ce message sera visible dans son application pendant 3 jours.',
+                    style: TextStyle(fontSize: 12, color: AppColors.mutedForeground),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: sending ? null : () => Navigator.pop(context),
+                  child: const Text('Annuler'),
+                ),
+                TextButton(
+                  onPressed: sending ? null : () async {
+                    if (controller.text.trim().isEmpty) return;
+                    setDialogState(() => sending = true);
+                    try {
+                      final auth = Provider.of<AuthProvider>(context, listen: false);
+                      final api = Provider.of<ApiService>(context, listen: false);
+                      await api.sendMessageToClient(auth.user!.id, clientId, controller.text.trim());
+                      if (mounted) Navigator.pop(context, true);
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                        );
+                        setDialogState(() => sending = false);
+                      }
+                    }
+                  },
+                  child: sending 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
+                    : const Text('Envoyer', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          }
+        );
+      },
+    );
+
+    if (sent == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Message envoyé')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
@@ -290,6 +360,11 @@ class _CommercialDashboardScreenState extends State<CommercialDashboardScreen> {
                                           const SizedBox(width: 16),
                                           _miniStat(Icons.notifications_outlined, '${(client['reminderCount'] as num?)?.toInt() ?? 0} rappels'),
                                           const Spacer(),
+                                          IconButton(
+                                            icon: const Icon(Icons.message_rounded, size: 20, color: AppColors.warning),
+                                            tooltip: 'Envoyer un message',
+                                            onPressed: () => sendMessage(client['id'] as int, client['name'] as String),
+                                          ),
                                           if (isValid)
                                             IconButton(
                                               icon: const Icon(Icons.add_alarm_rounded, size: 20, color: AppColors.primary),

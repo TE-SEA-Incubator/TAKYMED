@@ -341,6 +341,21 @@ class ApiService {
     throw Exception(_apiErrorMessage(response, fallback: 'Échec de l\'inscription'));
   }
 
+  Future<String> forgotPin(String phone) async {
+    final normalizedPhone = _normalizeAuthPhone(phone);
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/forgot-pin'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'phone': normalizedPhone}),
+    );
+
+    if (response.statusCode == 200) {
+      final data = _decodeJsonMap(response);
+      return data['message']?.toString() ?? 'Un nouveau PIN a été envoyé par SMS';
+    }
+    throw Exception(_apiErrorMessage(response, fallback: 'Échec de la demande'));
+  }
+
   String _normalizeAuthPhone(String phone) {
     final trimmed = phone.trim();
     if (trimmed.toLowerCase() == 'admin') return 'admin';
@@ -597,6 +612,26 @@ class ApiService {
     }
   }
 
+  Future<void> sendMessageToClient(int commercialId, int clientId, String message) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/commercial/send-message'),
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': commercialId.toString(),
+      },
+      body: jsonEncode({
+        'commercialId': commercialId,
+        'clientId': clientId,
+        'message': message,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body is Map ? (body['error'] ?? 'Échec de l\'envoi') : 'Échec de l\'envoi');
+    }
+  }
+
   Future<void> updateOrdonnance(
     int id,
     String titre,
@@ -700,6 +735,36 @@ class ApiService {
 
     if (response.statusCode != 200) {
       throw Exception('Échec du marquage des prises');
+    }
+  }
+
+  Future<Map<String, dynamic>> getAccountSettings(int userId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/admin/settings'),
+      headers: {'x-user-id': userId.toString()},
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Échec de la récupération des paramètres');
+  }
+
+  Future<void> submitUpgradeRequest(int userId, String requestedType, {String? motive}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/upgrade-request'),
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': userId.toString(),
+      },
+      body: jsonEncode({
+        'requestedType': requestedType,
+        'motive': motive,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body is Map ? (body['error'] ?? 'Échec de la demande') : 'Échec de la demande');
     }
   }
 }

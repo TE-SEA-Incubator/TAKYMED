@@ -167,24 +167,19 @@ async function checkAndSendReminders() {
      * est >= aujourd'hui (ignorer complètement les jours passés).
      */
     const windowEnd = now; // exclusif dans la requête (< windowEnd)
-    const windowStart = new Date(now.getTime() - CRON_INTERVAL_MS); // inclus
-
-    // Borne minimale : début du jour courant en UTC pour éviter les rappels
-    // de jours précédents après un redémarrage. On utilise la date locale
-    // et on la convertit en ISO pour SQLite.
+    // Borne minimale : début du jour courant en local, converti en ISO pour SQLite.
     const todayStart = new Date(now);
     todayStart.setHours(0, 0, 0, 0);
 
     // Cooldown de retry : ne pas re-tenter un rappel échoué avant 5 min
     const retryCooldown = new Date(now.getTime() - 5 * 60 * 1000);
 
-    const windowStartStr = windowStart.toISOString();
     const windowEndStr   = windowEnd.toISOString();
     const todayStartStr  = todayStart.toISOString();
     const retryCooldownStr = retryCooldown.toISOString();
 
     console.log(
-      `🕐 Reminder cron tick at ${now.toISOString()} — window: [${windowStartStr}, ${windowEndStr})`
+      `🕐 Reminder cron tick at ${now.toISOString()} — interval: ${cronIntervalMs / 1000}s — checking from ${todayStartStr}`
     );
 
     const dueDoses = db
@@ -211,7 +206,6 @@ async function checkAndSendReminders() {
           AND cp.tentatives_rappel < 3
           AND (cp.dernier_essai IS NULL OR cp.dernier_essai <= ?)
           AND cp.heure_prevue >= ?
-          AND cp.heure_prevue >= ?
           AND cp.heure_prevue <  ?
           AND o.est_active = 1
         ORDER BY cp.heure_prevue ASC
@@ -220,7 +214,6 @@ async function checkAndSendReminders() {
       .all(
         retryCooldownStr,
         todayStartStr,   // ne jamais aller chercher avant aujourd'hui
-        windowStartStr,  // borne basse inclusive
         windowEndStr     // borne haute exclusive (le tick de "now" sera envoyé lors du suivant)
       ) as DueDoseRow[];
 

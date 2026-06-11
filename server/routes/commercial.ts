@@ -333,6 +333,47 @@ router.patch("/clients/:id", (req, res) => {
     }
 });
 
+// Endpoint to send a message to a client
+router.post("/send-message", async (req, res) => {
+    const { commercialId, clientId, message } = req.body;
+
+    if (!commercialId || !clientId || !message) {
+        return res.status(400).json({ error: "Commercial ID, Client ID et message requis" });
+    }
+
+    const numericCommercialId = Number(commercialId);
+    if (!assertHeaderMatchesCommercial(req.headers["x-user-id"], numericCommercialId)) {
+        return res.status(403).json({ error: "Identité commercial invalide." });
+    }
+
+    try {
+        // Verify commercial ownership
+        const client = db.prepare("SELECT id_utilisateur FROM Utilisateurs WHERE id_utilisateur = ? AND id_createur = ?").get(clientId, numericCommercialId);
+        if (!client) {
+            return res.status(403).json({ error: "Accès refusé ou client non trouvé." });
+        }
+
+        const commercialProfile = db.prepare("SELECT nom_complet FROM ProfilsUtilisateurs WHERE id_utilisateur = ?").get(numericCommercialId) as { nom_complet: string } | undefined;
+        const senderName = commercialProfile?.nom_complet || "Votre conseiller TAKYMED";
+
+        // Insert in-app notification
+        db.prepare(`
+            INSERT INTO Notifications (id_utilisateur, titre, contenu, type_notif)
+            VALUES (?, ?, ?, ?)
+        `).run(clientId, `Message de ${senderName}`, message, 'commercial_message');
+
+        // Send push notification
+        await sendPushToUser(Number(clientId), `Message de ${senderName}`, message).catch(err => {
+            console.error("Failed to send push notification:", err);
+        });
+
+        res.json({ success: true, message: "Message envoyé avec succès" });
+    } catch (error) {
+        console.error("Commercial send-message error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
 // Endpoint to delete a client (used for cancellation before validation)
 router.delete("/clients/:id", (req, res) => {
     const { id } = req.params;

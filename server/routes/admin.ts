@@ -4,6 +4,14 @@ import { z } from "zod";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { verifyRole } from "../middleware/auth";
+import {
+    isDefaultAdminUserId,
+    PROTECTED_ADMIN_DELETE_ERROR,
+    PROTECTED_ADMIN_PHONE_ERROR,
+    PROTECTED_ADMIN_TYPE_ERROR,
+} from "../utils/protectedAdmin";
+import { getCronIntervalMs, setCronIntervalMs } from "../services/reminderWorker";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,14 +64,24 @@ const medicationSchema = z.object({
     }).optional(),
 });
 
-import { verifyRole } from "../middleware/auth";
-import {
-    isDefaultAdminUserId,
-    PROTECTED_ADMIN_DELETE_ERROR,
-    PROTECTED_ADMIN_PHONE_ERROR,
-    PROTECTED_ADMIN_TYPE_ERROR,
-} from "../utils/protectedAdmin";
-import { getCronIntervalMs, setCronIntervalMs } from "../services/reminderWorker";
+// Account Types Settings (join with FraisComptesProfessionnels for pricing)
+// MOVED ABOVE Administrateur check to allow all users to view plans
+router.get("/settings", (_req, res) => {
+    try {
+        const types = db.prepare(`
+            SELECT tc.id_type_compte as id, tc.nom_type as name, tc.description,
+                   tc.max_ordonnances as maxOrdonnances, tc.max_rappels as maxRappels,
+                   COALESCE(f.montant, 0) as price, COALESCE(f.devise, 'FCFA') as currency
+            FROM TypesComptes tc
+            LEFT JOIN FraisComptesProfessionnels f ON tc.id_type_compte = f.id_type_compte
+            ORDER BY tc.id_type_compte ASC
+        `).all();
+        res.json({ types });
+    } catch (error) {
+        console.error("Settings fetch error:", error);
+        res.status(500).json({ error: "Failed to fetch settings" });
+    }
+});
 
 // Middleware to check if user is admin
 router.use(verifyRole(["Administrateur"]));
@@ -320,7 +338,7 @@ router.get("/medications/:id", (req, res) => {
             WHERE id_medicament = ?
         `).get(id);
 
-        if (!medication) {
+        if (! medication) {
             return res.status(404).json({ error: "Medication not found" });
         }
 
@@ -456,24 +474,6 @@ router.delete("/medications/:id", (req, res) => {
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: "Failed to delete medication" });
-    }
-});
-
-// Account Types Settings (join with FraisComptesProfessionnels for pricing)
-router.get("/settings", (_req, res) => {
-    try {
-        const types = db.prepare(`
-            SELECT tc.id_type_compte as id, tc.nom_type as name, tc.description,
-                   tc.max_ordonnances as maxOrdonnances, tc.max_rappels as maxRappels,
-                   COALESCE(f.montant, 0) as price, COALESCE(f.devise, 'FCFA') as currency
-            FROM TypesComptes tc
-            LEFT JOIN FraisComptesProfessionnels f ON tc.id_type_compte = f.id_type_compte
-            ORDER BY tc.id_type_compte ASC
-        `).all();
-        res.json({ types });
-    } catch (error) {
-        console.error("Settings fetch error:", error);
-        res.status(500).json({ error: "Failed to fetch settings" });
     }
 });
 
@@ -675,7 +675,7 @@ router.patch("/users/:id", (req, res) => {
             // Check if profile exists
             const profile = db.prepare("SELECT id_utilisateur FROM ProfilsUtilisateurs WHERE id_utilisateur = ?").get(id);
             if (profile) {
-                db.prepare("UPDATE ProfilsUtilisateurs SET nom_complet = ? WHERE id_utilisateur = ?").run(name, id);
+                db.prepare("UPDATE ProfilsUtilisateurs nom_complet = ? WHERE id_utilisateur = ?").run(name, id);
             } else {
                 db.prepare("INSERT INTO ProfilsUtilisateurs (id_utilisateur, nom_complet) VALUES (?, ?)").run(id, name);
             }

@@ -6,6 +6,7 @@ import '../widgets/gradient_header.dart';
 import '../widgets/page_transitions.dart';
 import 'notifications_screen.dart';
 import 'settings_screen.dart';
+import 'upgrade_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -30,6 +31,17 @@ class ProfileScreen extends StatelessWidget {
                     title: const Text('Notifications'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => pushSlide(context, const NotificationsScreen(embedded: true)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Card(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: ListTile(
+                    leading: const Icon(Icons.card_membership_rounded, color: AppColors.primary),
+                    title: const Text('Mon abonnement'),
+                    subtitle: const Text('Standard / Pro / Commercial'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => pushSlide(context, const UpgradeScreen()),
                   ),
                 ),
                 const SizedBox(height: 12),

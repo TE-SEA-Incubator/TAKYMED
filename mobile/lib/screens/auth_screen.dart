@@ -338,6 +338,30 @@ class _AuthScreenState extends State<AuthScreen> {
                   isLoading: _isLoading,
                   onPressed: _onSubmitPin,
                 ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: _isLoading ? null : () async {
+                    setState(() => _isLoading = true);
+                    try {
+                      final api = Provider.of<ApiService>(context, listen: false);
+                      final msg = await api.forgotPin(_fullPhone);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(msg)),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(_cleanError(e))),
+                        );
+                      }
+                    } finally {
+                      if (mounted) setState(() => _isLoading = false);
+                    }
+                  },
+                  child: const Text('Code PIN oublié ?', style: TextStyle(color: AppColors.mutedForeground)),
+                ),
                 const SizedBox(height: 8),
                 TextButton(
                   onPressed: () => setState(() {

@@ -407,6 +407,7 @@ class _AddMedicationFormState extends State<AddMedicationForm> {
   String _unit = 'comprimé';
   List<String> _times = ['08:00'];
   List<TextEditingController> _timeControllers = [TextEditingController(text: '08:00')];
+  bool _applyCustomReminderHours = false;
 
   @override
   void initState() {
@@ -425,6 +426,34 @@ class _AddMedicationFormState extends State<AddMedicationForm> {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  void _calculateAutoTimes(String firstTime) {
+    if (_frequencyType == '1x') return;
+    
+    final parts = firstTime.split(':');
+    final h = int.parse(parts[0]);
+    final m = int.parse(parts[1]);
+    
+    int interval = 24;
+    int count = 1;
+    
+    if (_frequencyType == '2x') { interval = 12; count = 2; }
+    else if (_frequencyType == '3x') { interval = 8; count = 3; }
+    else if (_frequencyType == '4x') { interval = 6; count = 4; }
+    
+    final List<String> newTimes = [];
+    for (int i = 0; i < count; i++) {
+      final hour = (h + i * interval) % 24;
+      newTimes.add('${hour.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}');
+    }
+    
+    setState(() {
+      _times = newTimes;
+      // Re-create controllers to match new length
+      for (var c in _timeControllers) { c.dispose(); }
+      _timeControllers = _times.map((t) => TextEditingController(text: t)).toList();
+    });
   }
 
   void _updateTimes() {
@@ -585,14 +614,15 @@ class _AddMedicationFormState extends State<AddMedicationForm> {
               const SizedBox(height: 16),
               ..._times.asMap().entries.map((entry) {
                 final index = entry.key;
+                final isAuto = !_applyCustomReminderHours && index > 0;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: AppTextField(
                     readOnly: true,
                     controller: _timeControllers[index],
-                    label: 'Heure ${index + 1}',
+                    label: 'Heure ${index + 1}${isAuto ? " (Auto)" : ""}',
                     prefixIcon: Icons.access_time_rounded,
-                    onTap: () async {
+                    onTap: isAuto ? null : () async {
                       final timeParts = _times[index].split(':');
                       final pickedTime = await showTimePicker(
                         context: context,
@@ -602,17 +632,56 @@ class _AddMedicationFormState extends State<AddMedicationForm> {
                         ),
                       );
                       if (pickedTime != null) {
-                        setState(() {
-                          final newTime =
-                              '${pickedTime.hour.toString().padLeft(2, '0')}:${pickedTime.minute.toString().padLeft(2, '0')}';
-                          _times[index] = newTime;
-                          _timeControllers[index].text = newTime;
-                        });
+                        final newTime =
+                            '${pickedTime.hour.toString().padLeft(2, '0')}:${pickedTime.minute.toString().padLeft(2, '0')}';
+                        if (!_applyCustomReminderHours && index == 0) {
+                          _calculateAutoTimes(newTime);
+                        } else {
+                          setState(() {
+                            _times[index] = newTime;
+                            _timeControllers[index].text = newTime;
+                          });
+                        }
                       }
                     },
                   ),
                 );
               }),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      height: 24, width: 24,
+                      child: Checkbox(
+                        value: _applyCustomReminderHours,
+                        onChanged: (v) => setState(() => _applyCustomReminderHours = v ?? false),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Personnalisation (Mode manuel)',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
+                          ),
+                          Text(
+                            'Définir chaque heure manuellement',
+                            style: TextStyle(fontSize: 10, color: AppColors.mutedForeground),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
             const SizedBox(height: 16),
             AppTextField(

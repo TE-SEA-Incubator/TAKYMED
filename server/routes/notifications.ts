@@ -35,6 +35,7 @@ router.get("/", (req, res) => {
             SELECT id_notification as id, titre, contenu, type_notif as type, est_lu as isRead, cree_le as createdAt
             FROM Notifications
             WHERE id_utilisateur = ?
+            AND (type_notif <> 'commercial_message' OR datetime(cree_le) >= datetime('now', '-3 days'))
             ORDER BY cree_le DESC
             LIMIT 100
         `,

@@ -169,6 +169,42 @@ router.get("/pin-info", async (req, res) => {
   }
 });
 
+router.post("/forgot-pin", async (req, res) => {
+  const { phone } = req.body;
+
+  try {
+    const normalizedPhone = normalizePhone(typeof phone === "string" ? phone : "");
+    if (!normalizedPhone) {
+      return res.status(400).json({ error: "Le numéro de téléphone est requis" });
+    }
+
+    const user = findUserByPhone(normalizedPhone);
+    if (!user) {
+      return res.status(404).json({ error: "Aucun compte trouvé avec ce numéro" });
+    }
+
+    const newPin = generatePin();
+    const expiresAt = pinExpiryIso();
+    const updatedAt = new Date().toISOString();
+
+    db.prepare(`
+      UPDATE Utilisateurs
+      SET pin_hash = ?, pin_expires_at = ?, pin_updated_at = ?
+      WHERE id_utilisateur = ?
+    `).run(newPin, expiresAt, updatedAt, user.id_utilisateur);
+
+    await sendPinSms(normalizedPhone, newPin, "regenerate");
+
+    res.json({
+      success: true,
+      message: "Un nouveau code PIN vous a été envoyé par SMS",
+    });
+  } catch (error) {
+    console.error("Forgot PIN error:", error);
+    res.status(500).json({ error: "Erreur lors de la réinitialisation du PIN" });
+  }
+});
+
 router.post("/regenerate-pin", async (req, res) => {
   const userId = req.headers["x-user-id"];
 
