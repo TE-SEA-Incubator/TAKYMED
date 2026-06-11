@@ -301,6 +301,9 @@ class _OrdonnanceDetailPanelState extends State<OrdonnanceDetailPanel> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.details == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
     final medicaments = widget.details['medicaments'] as List<dynamic>? ?? [];
     final rappels = widget.details['rappels'] as List<dynamic>? ?? [];
     final phone = widget.ord['phone']?.toString();
@@ -311,25 +314,35 @@ class _OrdonnanceDetailPanelState extends State<OrdonnanceDetailPanel> {
         if (_active)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: OutlinedButton.icon(
-              onPressed: _editOrdonnance,
-              icon: const Icon(Icons.edit_outlined, size: 18),
-              label: const Text('Modifier l\'ordonnance'),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _editOrdonnance,
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: const Text('Modifier l\'ordonnance'),
+                  ),
+                ),
+              ],
             ),
           ),
         if (phone != null && phone.isNotEmpty) ...[
           Row(
             children: [
-              OutlinedButton.icon(
-                onPressed: () => _openWhatsApp(phone),
-                icon: const Icon(Icons.chat_rounded, size: 16, color: Colors.green),
-                label: const Text('WhatsApp'),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _openWhatsApp(phone),
+                  icon: const Icon(Icons.chat_rounded, size: 16, color: Colors.green),
+                  label: const Text('WhatsApp'),
+                ),
               ),
               const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: () => _openPhone(phone),
-                icon: const Icon(Icons.phone_rounded, size: 16),
-                label: const Text('Appeler'),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _openPhone(phone),
+                  icon: const Icon(Icons.phone_rounded, size: 16),
+                  label: const Text('Appeler'),
+                ),
               ),
             ],
           ),
