@@ -22,6 +22,8 @@ import {
     ArrowRightLeft,
     Loader2,
     UserPlus,
+    Timer,
+    RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -152,6 +154,11 @@ export default function AdminDashboard() {
     const [monthlyActivity, setMonthlyActivity] = useState<MonthlyActivityPoint[]>([]);
     const [loading, setLoading] = useState(true);
 
+    // ─── Cron config ──────────────────────────────────────────────────────────
+    const [cronIntervalSeconds, setCronIntervalSeconds] = useState<number>(60);
+    const [cronInputValue, setCronInputValue] = useState<string>("60");
+    const [isSavingCron, setIsSavingCron] = useState(false);
+
     const [isAddCatOpen, setIsAddCatOpen] = useState(false);
     const [newCat, setNewCat] = useState({ name: "", description: "", considerWeight: false });
     const [editingCat, setEditingCat] = useState<{ id: number, name: string, description: string, considerWeight: boolean } | null>(null);
@@ -163,7 +170,7 @@ export default function AdminDashboard() {
     const [isChangeTypeOpen, setIsChangeTypeOpen] = useState(false);
 
     const [isEditUserOpen, setIsEditUserOpen] = useState(false);
-    const [clientToEdit, setClientToEdit] = useState<{ id: number; phone: string; name: string; protected?: boolean } | null>(null);
+    const [clientToEdit, setClientToEdit] = useState<{ id: number; phone: string; email: string; name: string; protected?: boolean } | null>(null);
 
     const [selectedCommercial, setSelectedCommercial] = useState<any | null>(null);
     const [commercialClients, setCommercialClients] = useState<any[]>([]);
@@ -254,6 +261,7 @@ export default function AdminDashboard() {
                 monthlyActivityRes,
                 commRes,
                 unassignedRes,
+                cronRes,
             ] = await Promise.all([
                 fetch("/api/admin/stats", { headers }),
                 fetch("/api/admin/users", { headers }),
@@ -265,6 +273,7 @@ export default function AdminDashboard() {
                 fetch("/api/admin/monthly-activity", { headers }),
                 fetch("/api/admin/commercials", { headers }),
                 fetch("/api/admin/unassigned-clients", { headers }),
+                fetch("/api/admin/cron-config", { headers }),
             ]);
 
             if (statsRes.ok && usersRes.ok && medsRes.ok && settingsRes.ok && pharmRes.ok && catRes.ok) {
@@ -303,6 +312,12 @@ export default function AdminDashboard() {
                 if (unassignedRes.ok) {
                     const unassignedData = await unassignedRes.json();
                     setUnassignedClients(unassignedData.clients);
+                }
+
+                if (cronRes.ok) {
+                    const cronData = await cronRes.json();
+                    setCronIntervalSeconds(cronData.intervalSeconds);
+                    setCronInputValue(String(cronData.intervalSeconds));
                 }
             } else {
                 toast.error("Impossible de charger toutes les données admin");
@@ -527,6 +542,38 @@ export default function AdminDashboard() {
         else toast.error("Erreur de sauvegarde");
     };
 
+    const handleSaveCronInterval = async () => {
+        const seconds = Number(cronInputValue);
+        if (!Number.isFinite(seconds) || seconds < 30 || seconds > 3600) {
+            toast.error("Intervalle invalide (30s — 3600s)");
+            return;
+        }
+        setIsSavingCron(true);
+        try {
+            const res = await fetch("/api/admin/cron-config", {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-user-id": user?.id?.toString() || "",
+                },
+                body: JSON.stringify({ intervalSeconds: seconds }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setCronIntervalSeconds(data.intervalSeconds);
+                setCronInputValue(String(data.intervalSeconds));
+                toast.success(`⏱️ ${data.message}`);
+            } else {
+                const data = await res.json().catch(() => null);
+                toast.error(data?.error || "Erreur de mise à jour");
+            }
+        } catch {
+            toast.error("Erreur réseau");
+        } finally {
+            setIsSavingCron(false);
+        }
+    };
+
     const handleAddCat = async () => {
         if (!newCat.name.trim()) return toast.error("Le nom est requis");
         const res = await fetch("/api/categories", {
@@ -645,7 +692,7 @@ export default function AdminDashboard() {
                     'Content-Type': 'application/json',
                     'x-user-id': user?.id?.toString() || ""
                 },
-                body: JSON.stringify({ phone: clientToEdit.phone, name: clientToEdit.name })
+                body: JSON.stringify({ phone: clientToEdit.phone, name: clientToEdit.name, email: clientToEdit.email })
             });
             if (res.ok) {
                 toast.success("Utilisateur mis à jour");
@@ -1076,7 +1123,11 @@ export default function AdminDashboard() {
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-slate-700 font-bold">
-                                                    {u.email || u.phone || "—"}
+                                                    <div className="flex flex-col">
+                                                        {u.phone && <span>{u.phone}</span>}
+                                                        {u.email && <span className="text-xs text-slate-400 font-normal">{u.email}</span>}
+                                                        {!u.phone && !u.email && "—"}
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex flex-col">
@@ -1098,7 +1149,7 @@ export default function AdminDashboard() {
                                                             size="icon"
                                                             className="hover:bg-teal-50 hover:text-teal-600 rounded-xl"
                                                             onClick={() => {
-                                                                setClientToEdit({ id: u.id, phone: u.phone || "", name: u.name || "", protected: u.protected });
+                                                                setClientToEdit({ id: u.id, phone: u.phone || "", email: u.email || "", name: u.name || "", protected: u.protected });
                                                                 setIsEditUserOpen(true);
                                                             }}
                                                             title="Modifier les infos"
@@ -1426,6 +1477,107 @@ export default function AdminDashboard() {
                             <EditableSettingCard key={s.id} setting={s} onSave={handleUpdateSetting} />
                         ))}
                     </div>
+
+                    {/* ── Cron Config Card ────────────────────────────────── */}
+                    <div className="mt-8">
+                        <div className="bg-white rounded-[2rem] border shadow-sm overflow-hidden" style={{ borderColor: "#e2e8f0" }}>
+                            {/* Header */}
+                            <div className="p-6 border-b flex items-center gap-4" style={{ borderColor: "#f1f5f9" }}>
+                                <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg" style={{ background: "linear-gradient(135deg, #006093, #00A859)" }}>
+                                    <Timer className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-800">Planificateur de rappels (Cron)</h3>
+                                    <p className="text-xs text-slate-400 font-medium mt-0.5">
+                                        Réglage de la fréquence de vérification des rappels médicament.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Body */}
+                            <div className="p-6 flex flex-col md:flex-row items-start md:items-end gap-6">
+                                {/* Status badge */}
+                                <div className="flex-1">
+                                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">État actuel</p>
+                                    <div className="flex items-center gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                                        <span className="relative flex h-3 w-3">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                                        </span>
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-800">
+                                                Cron actif — vérification toutes les{" "}
+                                                <span className="text-teal-600">
+                                                    {cronIntervalSeconds < 60
+                                                        ? `${cronIntervalSeconds} secondes`
+                                                        : cronIntervalSeconds === 60
+                                                        ? "1 minute"
+                                                        : `${(cronIntervalSeconds / 60).toFixed(cronIntervalSeconds % 60 === 0 ? 0 : 1)} minutes`}
+                                                </span>
+                                            </p>
+                                            <p className="text-xs text-slate-400 mt-0.5">Fenêtre de rappel : intervalle précédent (heure − T, heure exclusive)</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Interval input */}
+                                <div className="flex-1">
+                                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Nouvel intervalle (secondes)</p>
+                                    <div className="flex items-center gap-3">
+                                        <div className="relative flex-1">
+                                            <Input
+                                                id="cron-interval-input"
+                                                type="number"
+                                                min={30}
+                                                max={3600}
+                                                step={30}
+                                                value={cronInputValue}
+                                                onChange={(e) => setCronInputValue(e.target.value)}
+                                                onKeyDown={(e) => { if (e.key === "Enter") handleSaveCronInterval(); }}
+                                                className="h-12 rounded-2xl border-slate-200 bg-slate-50 focus:bg-white pr-16 font-mono font-bold text-slate-800"
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-bold pointer-events-none">sec</span>
+                                        </div>
+                                        <Button
+                                            onClick={handleSaveCronInterval}
+                                            disabled={isSavingCron}
+                                            className="h-12 px-6 rounded-2xl font-bold text-white shadow-lg shadow-teal-100 flex items-center gap-2"
+                                            style={{ background: "linear-gradient(135deg, #006093, #00A859)" }}
+                                        >
+                                            {isSavingCron
+                                                ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                : <RefreshCw className="w-4 h-4" />}
+                                            Appliquer
+                                        </Button>
+                                    </div>
+                                    <p className="text-xs text-slate-400 mt-2 px-1">
+                                        Min : 30 s · Max : 3600 s (60 min) · Valeur courante : <span className="font-mono font-bold text-slate-600">{cronIntervalSeconds}s</span>
+                                    </p>
+                                </div>
+
+                                {/* Quick presets */}
+                                <div className="flex-shrink-0">
+                                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Préréglages rapides</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {[{ label: "30s", value: 30 }, { label: "1 min", value: 60 }, { label: "2 min", value: 120 }, { label: "5 min", value: 300 }].map((preset) => (
+                                            <button
+                                                key={preset.value}
+                                                onClick={() => setCronInputValue(String(preset.value))}
+                                                className={cn(
+                                                    "px-3 py-1.5 rounded-xl text-xs font-bold border transition-all",
+                                                    Number(cronInputValue) === preset.value
+                                                        ? "bg-teal-500 text-white border-teal-500 shadow-md"
+                                                        : "bg-slate-50 text-slate-600 border-slate-200 hover:border-teal-300 hover:text-teal-600"
+                                                )}
+                                            >
+                                                {preset.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </TabsContent>
 
                 {/* CATEGORIES TAB */}
@@ -1575,6 +1727,12 @@ export default function AdminDashboard() {
                                                             Vers: <span className="uppercase text-[#006093]">{req.requestedType}</span>
                                                         </div>
                                                     </div>
+                                                    {req.motive && (
+                                                        <div className="mt-3 bg-white border border-amber-100 rounded-xl p-3 text-xs text-slate-600">
+                                                            <strong className="text-amber-700 block mb-1">Motif / Justification :</strong>
+                                                            {req.motive}
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 
                                                 <div className="flex flex-col items-end gap-2">
@@ -1715,7 +1873,12 @@ export default function AdminDashboard() {
                                                     <span className="font-bold text-slate-800 text-sm">{client.name || client.phone}</span>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 border-b border-slate-50 text-sm text-slate-600 font-mono">{client.phone}</td>
+                                            <td className="px-6 py-4 border-b border-slate-50 text-sm text-slate-600 font-mono">
+                                                <div className="flex flex-col">
+                                                    {client.phone && <span>{client.phone}</span>}
+                                                    {client.email && <span className="text-xs text-slate-400 font-normal">{client.email}</span>}
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-4 border-b border-slate-50 text-right">
                                                 <Button 
                                                     variant="outline" 
@@ -1963,7 +2126,9 @@ export default function AdminDashboard() {
                                         <tr key={client.id} className="hover:bg-slate-50/50">
                                             <td className="px-6 py-4">
                                                 <div className="font-bold text-slate-800 text-sm">{client.name}</div>
-                                                <div className="text-[10px] font-mono text-slate-400">{client.phone}</div>
+                                                <div className="text-[10px] font-mono text-slate-400">
+                                                    {client.phone} {client.email && `| ${client.email}`}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 text-xs text-slate-500">
                                                 {new Date(client.createdAt).toLocaleDateString('fr-FR')}
@@ -2073,6 +2238,16 @@ export default function AdminDashboard() {
                                     L&apos;identifiant du compte administrateur système ne peut pas être modifié.
                                 </p>
                             )}
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Adresse E-mail</label>
+                            <Input
+                                type="email"
+                                value={clientToEdit?.email || ""}
+                                onChange={(e) => setClientToEdit(prev => prev ? { ...prev, email: e.target.value } : null)}
+                                placeholder="mail@example.com"
+                                className="h-12 rounded-2xl border-slate-200 bg-slate-50 focus:bg-white focus:ring-teal-500 transition-all font-medium"
+                            />
                         </div>
                     </div>
                     <DialogFooter className="flex flex-row gap-2">

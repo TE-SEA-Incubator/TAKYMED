@@ -22,7 +22,8 @@ class SearchMedicationsScreen extends StatefulWidget {
   const SearchMedicationsScreen({super.key, this.embedded = false});
 
   @override
-  State<SearchMedicationsScreen> createState() => _SearchMedicationsScreenState();
+  State<SearchMedicationsScreen> createState() =>
+      _SearchMedicationsScreenState();
 }
 
 class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
@@ -37,7 +38,8 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
   bool _isFindingLocation = false;
   int _mainSection = 0; // 0 = médicaments, 1 = pharmacies
   bool _loadingPharmacies = false;
-  final TextEditingController _pharmacyFilterController = TextEditingController();
+  final TextEditingController _pharmacyFilterController =
+      TextEditingController();
   bool _loading = false;
   bool _aiLoading = false;
   Map<String, dynamic>? _aiResult;
@@ -82,14 +84,17 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
         _bookmarks.add(id);
       }
     });
-    await prefs.setStringList('med_bookmarks', _bookmarks.map((e) => e.toString()).toList());
+    await prefs.setStringList(
+      'med_bookmarks',
+      _bookmarks.map((e) => e.toString()).toList(),
+    );
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _bookmarks.contains(id) 
-              ? 'Ajouté aux favoris' 
-              : 'Supprimé des favoris'
+            _bookmarks.contains(id)
+                ? 'Ajouté aux favoris'
+                : 'Supprimé des favoris',
           ),
         ),
       );
@@ -154,7 +159,10 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
   Future<void> _searchWithAI() async {
     final query = _searchController.text.trim();
     if (query.length < 2) return;
-    setState(() { _aiLoading = true; _aiResult = null; });
+    setState(() {
+      _aiLoading = true;
+      _aiResult = null;
+    });
     try {
       final api = Provider.of<ApiService>(context, listen: false);
       final data = await api.searchMedicationWithAI(query);
@@ -163,12 +171,15 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('IA: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('IA: $e')));
       }
     } finally {
-      if (mounted) setState(() { _aiLoading = false; });
+      if (mounted)
+        setState(() {
+          _aiLoading = false;
+        });
     }
   }
 
@@ -179,7 +190,11 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
       if (pos == null) {
         if (mounted && !silent) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Autorisez la localisation pour trier par proximité')),
+            const SnackBar(
+              content: Text(
+                'Autorisez la localisation pour trier par proximité',
+              ),
+            ),
           );
         }
         return;
@@ -209,12 +224,12 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
 
       final allNearby = (data['allNearby'] as List<dynamic>?) ?? [];
       final onDuty = (data['onDuty'] as List<dynamic>?) ?? [];
-      
+
       // Fusionner et marquer les pharmacies de garde
       final Map<dynamic, dynamic> unified = {};
       for (final p in allNearby) {
-          p['est_garde'] = false;
-          unified[p['id']] = p;
+        p['est_garde'] = false;
+        unified[p['id']] = p;
       }
       for (final p in onDuty) {
         p['est_garde'] = true;
@@ -232,9 +247,9 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
         setState(() {
           _pharmacies = [];
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Pharmacies: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Pharmacies: $e')));
       }
     } finally {
       if (mounted) setState(() => _loadingPharmacies = false);
@@ -268,9 +283,294 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
     }
   }
 
+  Future<void> _openMaps(double lat, double lng) async {
+    final url =
+        'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving';
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  void _showPharmacyDetails(dynamic p) {
+    final bool isGarde = p['est_garde'] == true || p['est_garde'] == 1;
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // En-tête
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 20,
+                ),
+                decoration: BoxDecoration(
+                  color: isGarde
+                      ? AppColors.warningLight
+                      : AppColors.primaryLight,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                (isGarde
+                                        ? AppColors.warning
+                                        : AppColors.primary)
+                                    .withValues(alpha: 0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        Icons.local_pharmacy_rounded,
+                        color: isGarde ? AppColors.warning : AppColors.primary,
+                        size: 26,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            p['name'] ?? 'Pharmacie',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          if (isGarde)
+                            Container(
+                              margin: const EdgeInsets.only(top: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.warning,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                'DE GARDE',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Corps
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.location_on_rounded,
+                          color: AppColors.mutedForeground,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Adresse',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                p['address'] ?? 'Aucune adresse renseignée',
+                                style: const TextStyle(
+                                  color: AppColors.mutedForeground,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.phone_rounded,
+                          color: AppColors.mutedForeground,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Téléphone',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                (p['phone'] != null &&
+                                        p['phone'].toString().trim().isNotEmpty)
+                                    ? p['phone']
+                                    : 'Non disponible',
+                                style: const TextStyle(
+                                  color: AppColors.mutedForeground,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              // Actions
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (p['latitude'] != null && p['longitude'] != null)
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _openMaps(
+                            (p['latitude'] as num).toDouble(),
+                            (p['longitude'] as num).toDouble(),
+                          );
+                        },
+                        icon: const Icon(Icons.directions_rounded),
+                        label: const Text('Itinéraire Google Maps'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.secondary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          textStyle: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: const Text(
+                              'Fermer',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (p['phone'] != null &&
+                            p['phone'].toString().trim().isNotEmpty) ...[
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () =>
+                                  _callPharmacy(p['phone'].toString()),
+                              icon: const Icon(
+                                Icons.phone_in_talk_rounded,
+                                size: 20,
+                              ),
+                              label: const Text('Appeler'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                textStyle: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   List<dynamic> _getRelevantInteractions() {
     if (_selectedMed == null) return [];
-    final selectedName = MedHelpers.safeString(_selectedMed['name']).toLowerCase();
+    final selectedName = MedHelpers.safeString(
+      _selectedMed['name'],
+    ).toLowerCase();
     if (selectedName.isEmpty) return [];
     return _interactions.where((i) {
       final med1 = MedHelpers.safeString(i['med1Name']).toLowerCase();
@@ -283,7 +583,9 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
     if (_selectedMed == null) return;
     Navigator.push(
       context,
-      SlidePageRoute(page: CreatePrescriptionScreen(initialMedName: _selectedMed['name'])),
+      SlidePageRoute(
+        page: CreatePrescriptionScreen(initialMedName: _selectedMed['name']),
+      ),
     );
   }
 
@@ -299,9 +601,14 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [AppColors.ai, Color(0xFFA855F7)]),
+                    gradient: const LinearGradient(
+                      colors: [AppColors.ai, Color(0xFFA855F7)],
+                    ),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: const Row(
@@ -309,19 +616,35 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                     children: [
                       Icon(Icons.auto_awesome, color: Colors.white, size: 14),
                       SizedBox(width: 4),
-                      Text('Résultat IA', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                      Text(
+                        'Résultat IA',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
                 if (ai['category'] != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.deepPurple[50],
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text(ai['category'], style: TextStyle(fontSize: 11, color: Colors.deepPurple[700])),
+                    child: Text(
+                      ai['category'],
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.deepPurple[700],
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -332,40 +655,69 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
             ),
             const SizedBox(height: 12),
             if (ai['description'] != null) ...[
-              _aiInfoRow(Icons.info_outline, 'Description', ai['description'], Colors.blue),
+              _aiInfoRow(
+                Icons.info_outline,
+                'Description',
+                ai['description'],
+                Colors.blue,
+              ),
               const SizedBox(height: 10),
             ],
             if (ai['dosage'] != null) ...[
-              _aiInfoRow(Icons.medication, 'Posologie', ai['dosage'], Colors.green),
+              _aiInfoRow(
+                Icons.medication,
+                'Posologie',
+                ai['dosage'],
+                Colors.green,
+              ),
               const SizedBox(height: 10),
             ],
             if (ai['precautions'] != null) ...[
-              _aiInfoRow(Icons.warning_amber, 'Précautions', ai['precautions'], Colors.orange),
+              _aiInfoRow(
+                Icons.warning_amber,
+                'Précautions',
+                ai['precautions'],
+                Colors.orange,
+              ),
               const SizedBox(height: 10),
             ],
             if (ai['sideEffects'] != null) ...[
-              _aiInfoRow(Icons.sick_outlined, 'Effets indésirables', ai['sideEffects'], Colors.red),
+              _aiInfoRow(
+                Icons.sick_outlined,
+                'Effets indésirables',
+                ai['sideEffects'],
+                Colors.red,
+              ),
               const SizedBox(height: 16),
             ],
             ElevatedButton.icon(
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(
-                  builder: (context) => CreatePrescriptionScreen(
-                    initialMedName: ai['name'] ?? _searchController.text,
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CreatePrescriptionScreen(
+                      initialMedName: ai['name'] ?? _searchController.text,
+                    ),
                   ),
-                ));
+                );
               },
               icon: const Icon(Icons.add),
               label: const Text('Ajouter au traitement'),
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 48),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
               ),
             ),
             const SizedBox(height: 8),
             const Text(
               '⚠️ Ces informations sont générées par IA et ne remplacent pas un avis médical.',
-              style: TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey,
+                fontStyle: FontStyle.italic,
+              ),
             ),
           ],
         ),
@@ -383,7 +735,14 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 13)),
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                  fontSize: 13,
+                ),
+              ),
               const SizedBox(height: 2),
               Text(value, style: const TextStyle(fontSize: 13, height: 1.4)),
             ],
@@ -404,13 +763,17 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
           if (!widget.embedded)
             GradientHeader(
               title: 'Rechercher',
-              subtitle: _mainSection == 0 ? 'Catalogue médicaments' : 'Pharmacies',
+              subtitle: _mainSection == 0
+                  ? 'Catalogue médicaments'
+                  : 'Pharmacies',
               showBack: true,
             )
           else
             GradientHeader(
               title: 'Rechercher',
-              subtitle: _mainSection == 0 ? 'Catalogue médicaments' : 'Pharmacies',
+              subtitle: _mainSection == 0
+                  ? 'Catalogue médicaments'
+                  : 'Pharmacies',
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -474,13 +837,22 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
           color: selected ? AppColors.surface : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           boxShadow: selected
-              ? [BoxShadow(color: AppColors.foreground.withValues(alpha: 0.06), blurRadius: 8)]
+              ? [
+                  BoxShadow(
+                    color: AppColors.foreground.withValues(alpha: 0.06),
+                    blurRadius: 8,
+                  ),
+                ]
               : null,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 18, color: selected ? AppColors.primary : AppColors.mutedForeground),
+            Icon(
+              icon,
+              size: 18,
+              color: selected ? AppColors.primary : AppColors.mutedForeground,
+            ),
             const SizedBox(width: 6),
             Text(
               label,
@@ -513,7 +885,11 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                 children: [
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: Icon(Icons.search_rounded, color: AppColors.mutedForeground, size: 24),
+                    child: Icon(
+                      Icons.search_rounded,
+                      color: AppColors.mutedForeground,
+                      size: 24,
+                    ),
                   ),
                   Expanded(
                     child: TextField(
@@ -528,7 +904,11 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                   if (_loading)
                     const Padding(
                       padding: EdgeInsets.only(right: 12),
-                      child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
                     ),
                 ],
               ),
@@ -564,7 +944,10 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                 hintText: 'Filtrer par nom ou adresse…',
                 prefixIcon: Icon(Icons.search_rounded),
                 border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 14,
+                ),
               ),
             ),
           ),
@@ -573,25 +956,26 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
           child: _loadingPharmacies
               ? const Center(child: CircularProgressIndicator())
               : list.isEmpty
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Text(
-                          _userLat == null
-                              ? 'Autorisez la localisation pour lister les pharmacies de votre ville.'
-                              : 'Aucune pharmacie trouvée${_locationCity != null ? ' à $_locationCity' : ' près de vous'}.',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: AppColors.mutedForeground),
-                        ),
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                      itemCount: list.length,
-                      separatorBuilder: (context, index) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) =>
-                          _buildPharmacyListTile(list[index], index),
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Text(
+                      _userLat == null
+                          ? 'Autorisez la localisation pour lister les pharmacies de votre ville.'
+                          : 'Aucune pharmacie trouvée${_locationCity != null ? ' à $_locationCity' : ' près de vous'}.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: AppColors.mutedForeground),
                     ),
+                  ),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                  itemCount: list.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 8),
+                  itemBuilder: (context, index) =>
+                      _buildPharmacyListTile(list[index], index),
+                ),
         ),
       ],
     );
@@ -603,7 +987,9 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
       child: Row(
         children: [
           Icon(
-            _userLat != null ? Icons.near_me_rounded : Icons.location_searching_rounded,
+            _userLat != null
+                ? Icons.near_me_rounded
+                : Icons.location_searching_rounded,
             size: 18,
             color: AppColors.primary,
           ),
@@ -613,22 +999,31 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
               _isFindingLocation
                   ? 'Localisation en cours…'
                   : _userLat != null
-                      ? 'Pharmacies de ${_locationCity ?? 'votre ville'} — du plus proche au plus loin'
-                      : 'Appuyez pour afficher les pharmacies de votre ville',
-              style: const TextStyle(fontSize: 13, color: AppColors.mutedForeground),
+                  ? 'Pharmacies de ${_locationCity ?? 'votre ville'} — du plus proche au plus loin'
+                  : 'Appuyez pour afficher les pharmacies de votre ville',
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.mutedForeground,
+              ),
             ),
           ),
           if (_isFindingLocation)
             const Padding(
               padding: EdgeInsets.only(right: 8),
-              child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
             )
           else
             IconButton(
               visualDensity: VisualDensity.compact,
               tooltip: _userLat != null ? 'Actualiser' : 'Ma position',
               icon: Icon(
-                _userLat != null ? Icons.refresh_rounded : Icons.my_location_rounded,
+                _userLat != null
+                    ? Icons.refresh_rounded
+                    : Icons.my_location_rounded,
                 color: AppColors.primary,
               ),
               onPressed: () => _getLocation(silent: _userLat != null),
@@ -650,7 +1045,7 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: phone.isNotEmpty ? () => _callPharmacy(phone) : null,
+        onTap: () => _showPharmacyDetails(pharmacy),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
@@ -659,12 +1054,16 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: isGarde ? AppColors.warningLight : AppColors.primaryLight,
+                  color: isGarde
+                      ? AppColors.warningLight
+                      : AppColors.primaryLight,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  distance != null ? MedHelpers.formatDistanceShort(distance) : '${index + 1}',
+                  distance != null
+                      ? MedHelpers.formatDistanceShort(distance)
+                      : '${index + 1}',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 11,
@@ -686,20 +1085,33 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                             name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
                           ),
                         ),
                         if (isGarde) ...[
                           const SizedBox(width: 6),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.warning,
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Text('GARDE', style: TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
+                            child: const Text(
+                              'GARDE',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
-                        ]
+                        ],
                       ],
                     ),
                     const SizedBox(height: 2),
@@ -707,7 +1119,10 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                       location,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12, color: AppColors.mutedForeground),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                   ],
                 ),
@@ -715,7 +1130,10 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
               if (phone.isNotEmpty)
                 IconButton(
                   visualDensity: VisualDensity.compact,
-                  icon: Icon(Icons.phone_in_talk_rounded, color: isGarde ? AppColors.warning : AppColors.primary),
+                  icon: Icon(
+                    Icons.phone_in_talk_rounded,
+                    color: isGarde ? AppColors.warning : AppColors.primary,
+                  ),
                   onPressed: () => _callPharmacy(phone),
                   tooltip: 'Appeler',
                 ),
@@ -740,20 +1158,21 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                 _medications.length >= _maxResults
                     ? '$_maxResults+ résultats — affinez votre recherche'
                     : '${_medications.length} médicament(s) trouvé(s)',
-                style: const TextStyle(
-                  color: Colors.grey,
-                  fontSize: 14,
-                ),
+                style: const TextStyle(color: Colors.grey, fontSize: 14),
               ),
             ),
-          if (_medications.isEmpty && !_loading && _searchController.text.trim().isNotEmpty)
+          if (_medications.isEmpty &&
+              !_loading &&
+              _searchController.text.trim().isNotEmpty)
             Column(
               children: [
                 const Card(
                   child: Padding(
                     padding: EdgeInsets.all(24),
                     child: Center(
-                      child: Text('Aucun médicament trouvé dans la base de données.'),
+                      child: Text(
+                        'Aucun médicament trouvé dans la base de données.',
+                      ),
                     ),
                   ),
                 ),
@@ -769,11 +1188,7 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.medication,
-                      size: 64,
-                      color: Colors.grey,
-                    ),
+                    Icon(Icons.medication, size: 64, color: Colors.grey),
                     SizedBox(height: 16),
                     Text(
                       'Sélectionnez un médicament',
@@ -786,9 +1201,7 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                     Text(
                       'Pour voir sa description et ses stocks en pharmacie.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.grey,
-                      ),
+                      style: TextStyle(color: Colors.grey),
                     ),
                   ],
                 ),
@@ -853,10 +1266,7 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                   ],
                 ),
               ),
-              Icon(
-                Icons.chevron_right,
-                color: Colors.grey[300],
-              ),
+              Icon(Icons.chevron_right, color: Colors.grey[300]),
             ],
           ),
         ),
@@ -899,7 +1309,9 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                 children: [
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final w = constraints.maxWidth.isFinite ? constraints.maxWidth : 300.0;
+                      final w = constraints.maxWidth.isFinite
+                          ? constraints.maxWidth
+                          : 300.0;
                       return MedicationImage(
                         photoUrl: _selectedMed['photoUrl']?.toString(),
                         width: w,
@@ -924,18 +1336,18 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .primaryContainer,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primaryContainer,
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
                                 (_selectedMed['type'] ?? 'médicament')
                                     .toUpperCase(),
                                 style: TextStyle(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onPrimaryContainer,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimaryContainer,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12,
                                 ),
@@ -971,10 +1383,15 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                               if (id != null) _toggleBookmark(id);
                             },
                             icon: Icon(
-                              _bookmarks.contains(MedHelpers.parseId(_selectedMed['id']))
+                              _bookmarks.contains(
+                                    MedHelpers.parseId(_selectedMed['id']),
+                                  )
                                   ? Icons.bookmark
                                   : Icons.bookmark_border,
-                              color: _bookmarks.contains(MedHelpers.parseId(_selectedMed['id']))
+                              color:
+                                  _bookmarks.contains(
+                                    MedHelpers.parseId(_selectedMed['id']),
+                                  )
                                   ? Colors.amber
                                   : null,
                             ),
@@ -1007,7 +1424,9 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                                   'Description',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    color: Theme.of(context).colorScheme.primary,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
                                     fontSize: 16,
                                   ),
                                 ),
@@ -1033,11 +1452,7 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                   // Precautions & Interactions
                   Row(
                     children: [
-                      Icon(
-                        Icons.warning,
-                        color: Colors.amber[700],
-                        size: 20,
-                      ),
+                      Icon(Icons.warning, color: Colors.amber[700], size: 20),
                       const SizedBox(width: 8),
                       Text(
                         'Précautions & Incompatibilités',
@@ -1079,113 +1494,110 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                                     _selectedMed['precautions'] != 'aucune'
                                 ? _selectedMed['precautions']
                                 : 'Aucune précaution spécifique enregistrée.',
-                            style: TextStyle(
-                              color: Colors.amber[800],
-                            ),
+                            style: TextStyle(color: Colors.amber[800]),
                           ),
                         ],
                       ),
                     ),
 
                   if (relevantInteractions.isNotEmpty)
-                    ...relevantInteractions.map(
-                      (inter) {
-                        final selectedName = MedHelpers.safeString(_selectedMed['name']).toLowerCase();
-                        final otherMed =
-                            MedHelpers.safeString(inter['med1Name']).toLowerCase() == selectedName
-                                ? MedHelpers.safeString(inter['med2Name'])
-                                : MedHelpers.safeString(inter['med1Name']);
-                        final Color riskColor;
-                        final Color bgColor;
-                        final Color borderColor;
-                        switch (inter['riskLevel']) {
-                          case 'critique':
-                            riskColor = Colors.red;
-                            bgColor = Colors.red[50]!;
-                            borderColor = Colors.red[100]!;
-                            break;
-                          case 'eleve':
-                            riskColor = Colors.orange;
-                            bgColor = Colors.orange[50]!;
-                            borderColor = Colors.orange[100]!;
-                            break;
-                          default:
-                            riskColor = Colors.amber;
-                            bgColor = Colors.amber[50]!;
-                            borderColor = Colors.amber[100]!;
-                        }
+                    ...relevantInteractions.map((inter) {
+                      final selectedName = MedHelpers.safeString(
+                        _selectedMed['name'],
+                      ).toLowerCase();
+                      final otherMed =
+                          MedHelpers.safeString(
+                                inter['med1Name'],
+                              ).toLowerCase() ==
+                              selectedName
+                          ? MedHelpers.safeString(inter['med2Name'])
+                          : MedHelpers.safeString(inter['med1Name']);
+                      final Color riskColor;
+                      final Color bgColor;
+                      final Color borderColor;
+                      switch (inter['riskLevel']) {
+                        case 'critique':
+                          riskColor = Colors.red;
+                          bgColor = Colors.red[50]!;
+                          borderColor = Colors.red[100]!;
+                          break;
+                        case 'eleve':
+                          riskColor = Colors.orange;
+                          bgColor = Colors.orange[50]!;
+                          borderColor = Colors.orange[100]!;
+                          break;
+                        default:
+                          riskColor = Colors.amber;
+                          bgColor = Colors.amber[50]!;
+                          borderColor = Colors.amber[100]!;
+                      }
 
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: bgColor,
-                              border: Border.all(color: borderColor),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(
-                                  Icons.warning,
-                                  color: riskColor,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Ne pas mélanger avec : $otherMed',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: riskColor,
-                                        ),
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: bgColor,
+                            border: Border.all(color: borderColor),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.warning, color: riskColor),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Ne pas mélanger avec : $otherMed',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: riskColor,
                                       ),
-                                      if (inter['description'] != null)
-                                        Padding(
-                                          padding:
-                                              const EdgeInsets.only(top: 4.0),
-                                          child: Text(
-                                            inter['description'],
-                                            style: TextStyle(
-                                              color: riskColor,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ),
-                                      const SizedBox(height: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: riskColor,
-                                          borderRadius:
-                                              BorderRadius.circular(8),
+                                    ),
+                                    if (inter['description'] != null)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          top: 4.0,
                                         ),
                                         child: Text(
-                                          'Risque ${inter['riskLevel']}',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
+                                          inter['description'],
+                                          style: TextStyle(
+                                            color: riskColor,
+                                            fontSize: 13,
                                           ),
                                         ),
                                       ),
-                                    ],
-                                  ),
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: riskColor,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        'Risque ${inter['riskLevel']}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      );
+                    }),
                 ],
               ),
             ),
@@ -1214,7 +1626,9 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
             label: const Text('Voir les pharmacies proches'),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 52),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
             ),
           ),
         ],

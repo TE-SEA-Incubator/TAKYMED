@@ -18,6 +18,7 @@ import 'screens/commercial_dashboard_screen.dart';
 import 'widgets/main_shell.dart';
 import 'screens/splash_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'services/push_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -68,6 +69,7 @@ class AuthWrapper extends StatefulWidget {
 
 class _AuthWrapperState extends State<AuthWrapper> {
   bool _onboardingDone = false;
+  bool _pollingStarted = false;
 
   @override
   void initState() {
@@ -91,6 +93,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
+    final apiService = Provider.of<ApiService>(context, listen: false);
 
     if (!authProvider.isInitialized) {
       return const SplashScreen();
@@ -100,6 +103,20 @@ class _AuthWrapperState extends State<AuthWrapper> {
       return OnboardingScreen(onComplete: _onOnboardingComplete);
     }
 
-    return authProvider.isAuthenticated ? const MainShell() : const LoginScreen();
+    if (authProvider.isAuthenticated) {
+      if (!_pollingStarted) {
+        _pollingStarted = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          PushService.startPolling(apiService, authProvider.user!.id);
+        });
+      }
+      return const MainShell();
+    } else {
+      if (_pollingStarted) {
+        _pollingStarted = false;
+        PushService.stopPolling();
+      }
+      return const LoginScreen();
+    }
   }
 }

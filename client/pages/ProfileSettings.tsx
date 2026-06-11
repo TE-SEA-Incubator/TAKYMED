@@ -21,6 +21,7 @@ export default function ProfileSettings() {
   const { t } = useLanguage();
   const [name, setName] = useState(user?.name || "");
   const [phone, setPhone] = useState(user?.phone || "");
+  const [email, setEmail] = useState(user?.email || "");
   const [isSaving, setIsSaving] = useState(false);
   const [notifPhone, setNotifPhone] = useState(user?.phone || "");
   const [channels, setChannels] = useState<NotificationChannel[]>(["push", "whatsapp"]);
@@ -74,7 +75,7 @@ export default function ProfileSettings() {
           "Content-Type": "application/json",
           "x-user-id": user?.id.toString() || "",
         },
-        body: JSON.stringify({ name, phone }),
+        body: JSON.stringify({ name, phone, email }),
       });
 
       if (!response.ok) {
@@ -82,7 +83,7 @@ export default function ProfileSettings() {
         throw new Error(errorData.error || "Erreur lors de la mise à jour");
       }
 
-      updateUser({ name, phone });
+      updateUser({ name, phone, email });
       toast.success(t('profile.success'));
     } catch (error: any) {
       toast.error(error.message);
@@ -158,6 +159,19 @@ export default function ProfileSettings() {
                 />
               </div>
               <p className="text-[10px] text-slate-400 font-medium ml-1">{t('profile.phoneHint')}</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Adresse E-mail</Label>
+              <div className="relative group">
+                <MessageSquare className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-primary transition-colors" />
+                <Input 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-12 h-14 rounded-2xl border-slate-200 focus:ring-primary/20 bg-slate-50/50"
+                  placeholder="nom@exemple.com"
+                />
+              </div>
             </div>
 
             <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 flex items-start gap-3">

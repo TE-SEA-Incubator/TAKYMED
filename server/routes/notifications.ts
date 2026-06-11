@@ -143,6 +143,22 @@ router.patch("/:id/read", (req, res) => {
   }
 });
 
+router.delete("/:id", (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: "Utilisateur non authentifié" });
+  const { id } = req.params;
+
+  try {
+    db.prepare(
+      "DELETE FROM Notifications WHERE id_notification = ? AND id_utilisateur = ?",
+    ).run(id, userId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Failed to delete notification:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
 router.post("/test-send", async (req, res) => {
   const userId = getUserId(req);
   if (!userId) return res.status(401).json({ error: "Utilisateur non authentifié" });

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -262,10 +263,14 @@ export default function CommercialDashboard() {
             />
           ) : (
             <div className="grid grid-cols-1 gap-4">
-              {filteredClients.map((client) => (
-                <article
+              {filteredClients.map((client, index) => (
+                <motion.article
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  whileHover={{ y: -2, scale: 1.01 }}
                   key={client.id}
-                  className="group rounded-[1.75rem] border border-white/80 bg-white/95 p-5 shadow-sm transition-all hover:border-primary/20 hover:shadow-md"
+                  className="group rounded-[1.75rem] border border-white/80 bg-white/95 p-5 shadow-sm transition-all hover:border-primary/30 hover:shadow-lg"
                 >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="flex min-w-0 items-start gap-4">
@@ -368,7 +373,7 @@ export default function CommercialDashboard() {
                       </Button>
                     </div>
                   </div>
-                </article>
+                </motion.article>
               ))}
             </div>
           )}

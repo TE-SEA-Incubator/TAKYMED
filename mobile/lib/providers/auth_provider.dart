@@ -55,10 +55,10 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updateUser(String name, String phone) async {
+  Future<void> updateUser(String name, String phone, {String? email}) async {
     _user = User(
       id: _user!.id,
-      email: _user!.email,
+      email: email ?? _user!.email,
       phone: phone,
       type: _user!.type,
       name: name,

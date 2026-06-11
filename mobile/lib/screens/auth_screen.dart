@@ -28,6 +28,7 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
   final _pinController = TextEditingController();
 
   AuthStep _step = AuthStep.phone;
@@ -73,7 +74,7 @@ class _AuthScreenState extends State<AuthScreen> {
         setState(() => _step = AuthStep.pin);
       } else {
         final api = Provider.of<ApiService>(context, listen: false);
-        final message = await api.register(_fullPhone, _selectedType);
+        final message = await api.register(_fullPhone, _selectedType, email: _emailController.text);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(message)),
@@ -255,6 +256,14 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 if (isRegister) ...[
                   const SizedBox(height: 16),
+                  AppTextField(
+                    controller: _emailController,
+                    label: 'Adresse e-mail (optionnel)',
+                    hint: 'nom@exemple.com',
+                    prefixIcon: Icons.email_rounded,
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  const SizedBox(height: 16),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
@@ -351,6 +360,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   void dispose() {
     _phoneController.dispose();
+    _emailController.dispose();
     _pinController.dispose();
     super.dispose();
   }

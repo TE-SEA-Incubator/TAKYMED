@@ -27,6 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isPinging = false;
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
   bool _isSavingProfile = false;
   bool _isLoadingNotifPrefs = false;
   bool _isSavingNotifPrefs = false;
@@ -40,6 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     _nameController.text = authProvider.user?.name ?? '';
     _phoneController.text = authProvider.user?.phone ?? '';
+    _emailController.text = authProvider.user?.email ?? '';
     _notifPhoneController.text = (authProvider.user?.phone ?? '').replaceAll('+237', '');
     _loadNotificationPreferences();
     _loadAppVersion();
@@ -110,6 +112,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _emailController.dispose();
     _notifPhoneController.dispose();
     super.dispose();
   }
@@ -132,10 +135,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         authProvider.user!.id,
         _nameController.text.trim(),
         _phoneController.text.trim(),
+        email: _emailController.text.trim(),
       );
       await authProvider.updateUser(
         _nameController.text.trim(),
         _phoneController.text.trim(),
+        email: _emailController.text.trim(),
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -290,6 +295,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             label: 'Numéro de téléphone',
                             prefixIcon: Icons.phone_rounded,
                             keyboardType: TextInputType.phone,
+                          ),
+                          const SizedBox(height: 16),
+                          AppTextField(
+                            controller: _emailController,
+                            label: 'Adresse e-mail (optionnel)',
+                            prefixIcon: Icons.email_rounded,
+                            keyboardType: TextInputType.emailAddress,
                           ),
                           const SizedBox(height: 20),
                           PrimaryButton(

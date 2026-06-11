@@ -22,6 +22,7 @@ export default function Auth({ mode }: { mode: "login" | "register" }) {
   const { t } = useLanguage();
   const [step, setStep] = useState<"form" | "pin">("form");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [pin, setPin] = useState("");
   const [selectedType, setSelectedType] = useState<AccountType>("standard");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -71,7 +72,7 @@ export default function Auth({ mode }: { mode: "login" | "register" }) {
         const response = await fetch("/api/auth/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone: fullPhone, type: selectedType }),
+          body: JSON.stringify({ phone: fullPhone, type: selectedType, email }),
         });
 
         if (!response.ok) {
@@ -175,6 +176,23 @@ export default function Auth({ mode }: { mode: "login" | "register" }) {
                   </div>
                 </div>
               </div>
+
+              {mode === "register" && (
+                <div className="space-y-2">
+                  <Label htmlFor="email">Adresse E-mail (optionnel)</Label>
+                  <div className="relative">
+                    <Smartphone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground opacity-0" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="nom@exemple.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-3 h-11 rounded-xl w-full"
+                    />
+                  </div>
+                </div>
+              )}
 
               {mode === "register" && (
                 <div className="p-3 bg-primary/5 rounded-xl border border-primary/10 text-sm text-muted-foreground">

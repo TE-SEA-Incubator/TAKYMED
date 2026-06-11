@@ -189,6 +189,26 @@ class ApiService {
     }
   }
 
+  Future<void> markNotificationAsRead(int userId, int notificationId) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/notifications/$notificationId/read'),
+      headers: {'x-user-id': userId.toString()},
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Échec du marquage de la notification comme lue');
+    }
+  }
+
+  Future<void> deleteNotification(int userId, int notificationId) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/notifications/$notificationId'),
+      headers: {'x-user-id': userId.toString()},
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Échec de la suppression de la notification');
+    }
+  }
+
   Future<Map<String, dynamic>> getNotificationPreferences(int userId) async {
     final response = await http.get(
       Uri.parse('$baseUrl/notifications/preferences'),
@@ -305,12 +325,12 @@ class ApiService {
   }
 
   /// Inscription identique au web : téléphone + type → PIN envoyé par SMS.
-  Future<String> register(String phone, String type) async {
+  Future<String> register(String phone, String type, {String? email}) async {
     final normalizedPhone = _normalizeAuthPhone(phone);
     final response = await http.post(
       Uri.parse('$baseUrl/auth/register'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone': normalizedPhone, 'type': type}),
+      body: jsonEncode({'phone': normalizedPhone, 'type': type, if (email != null && email.isNotEmpty) 'email': email}),
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) {
@@ -329,14 +349,14 @@ class ApiService {
     return PhoneUtils.normalizeCameroon(trimmed);
   }
 
-  Future<void> updateProfile(int userId, String name, String phone) async {
+  Future<void> updateProfile(int userId, String name, String phone, {String? email}) async {
     final response = await http.patch(
       Uri.parse('$baseUrl/auth/profile'),
       headers: {
         'Content-Type': 'application/json',
         'x-user-id': userId.toString(),
       },
-      body: jsonEncode({'name': name, 'phone': phone}),
+      body: jsonEncode({'name': name, 'phone': phone, if (email != null && email.isNotEmpty) 'email': email}),
     );
 
     if (response.statusCode != 200) {

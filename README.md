@@ -1,49 +1,54 @@
+<p align="center">
+  <img src="mobile/assets/images/takymed.png" alt="TAKYMED Logo" width="200" />
+</p>
+
 # 🏥 TAKYMED
 
-Application full-stack **React + Express** pour la gestion complète de pharmacies, ordonnances, rappels de prises et recherche de médicaments. Plateforme multi-rôles avec support pour patients, professionnels de santé et pharmaciens.
+**TAKYMED** est une application full-stack (Web, Mobile, Backend) conçue pour la gestion complète des pharmacies, ordonnances, rappels de prises de médicaments, et la recherche de médicaments. 
+Elle offre une plateforme multi-rôles adaptée aux patients, aux professionnels de santé, et aux gestionnaires de pharmacies.
 
 ---
 
 ## 🎯 Fonctionnalités principales
 
-- **👤 Gestion d'ordonnances** : Création, consultation et suivi des ordonnances
-- **⏰ Rappels de prises** : Notifications intelligentes pour la prise de médicaments
-- **�️ Calendrier interactif** : Visualisation des prises avec filtrage par client pour les professionnels
-- **�💊 Catalogue de médicaments** : Recherche et consultation détaillée des produits avec gestion dynamique des catégories d'âge
-- **🏪 Administration de pharmacies** : Gestion d'inventaire et des clients
-- **🔐 Authentification multi-rôles** : Support patients, professionnels, pharmaciens et admins
-- **📱 Interface responsive** : Adaptée aux appareils mobiles et desktop
+- **👤 Gestion d'ordonnances intelligente** : Création d'ordonnances avec **plusieurs médicaments**, configuration des doses, fréquences (1x/jour, 2x/jour, au besoin, etc.) et durées de traitement.
+- **⏰ Rappels de prises (Notifications Multi-Canaux)** : Planification des prises avec alertes intelligentes. Supporte les notifications via **Push (Mobile)**, **WhatsApp**, **SMS**, et **Appels téléphoniques**.
+- **️ Calendrier & Suivi interactif** : Visualisation des historiques de prises, filtrage par patient (pour les médecins et commerciaux), et suivi de l'observance.
+- **💊 Catalogue de médicaments dynamique** : Recherche instantanée et consultation détaillée des produits (doses, effets, précautions, catégories d'âge).
+- **🏪 Administration de pharmacies** : Intégration de cartes interactives (Google Maps) et numéros de garde. Les patients peuvent facilement localiser et contacter les pharmacies ouvertes.
+- **🔐 Authentification multi-rôles & Profils complets** : Connexion via numéro de téléphone + PIN. Gestion des profils utilisateurs incluant désormais des champs avancés comme l'adresse e-mail. Rôles supportés : Patients, Professionnels, Pharmaciens, Commerciaux et Administrateurs.
+- **📱 Interfaces Multiplateformes** : 
+  - **Web** (Dashboard complet pour les professionnels et pharmaciens).
+  - **Mobile** (Application compagnon optimisée pour les patients et commerciaux).
 
 ---
 
 ## 🛠️ Stack Technologique
 
-### Frontend
+### 💻 Frontend Web (React)
+- **React 18** avec **TypeScript** pour un typage strict et sécurisé.
+- **Vite** comme outil de build ultra-rapide.
+- **TailwindCSS** & **shadcn/ui** pour des interfaces modernes et responsive.
+- **React Router 6** pour le routage côté client.
 
-- **React 18** - Framework UI moderne
-- **Vite** - Build tool ultra-rapide
-- **React Router 6** - Routage côté client
-- **TailwindCSS** - Styling utility-first
-- **TypeScript** - Typage statique
+### 📱 Frontend Mobile (Flutter)
+- **Flutter** pour les applications natives iOS et Android.
+- **Provider** pour la gestion de l'état.
+- Intégration API via requêtes asynchrones standard.
 
-### Backend
-
-- **Express.js** - Serveur web et API REST
-- **SQLite** avec `better-sqlite3` - Base de données embarquée
-- **TypeScript** - Typage statique côté serveur
-
-### Qualité du code
-
-- **Vitest** - Tests unitaires et d'intégration
-- **Shared types** (`shared/api.ts`) - Types synchronisés frontend/backend
-- **Type checking** - Vérification TypeScript stricte
+### ⚙️ Backend (Node.js)
+- **Express.js** en **TypeScript** fournissant l'API REST globale.
+- **SQLite** avec `better-sqlite3` pour une base de données embarquée rapide, sans configuration lourde.
+- Synchronisation complète des types entre frontend Web et Backend via `shared/api.ts`.
 
 ---
 
 ## 📋 Prérequis
 
+Pour exécuter ce projet localement :
 - **Node.js** >= 18.x
 - **npm** >= 9.x
+- **Flutter SDK** (pour compiler ou lancer l'application mobile)
 
 ---
 
@@ -56,125 +61,75 @@ git clone https://github.com/Archlord12345/TAKYMED.git
 cd TAKYMED
 ```
 
-### 2. Installer les dépendances
+### 2. Installer les dépendances (Web & Backend)
 
 ```bash
 npm install
 ```
 
-### 3. Lancer en développement
+### 3. Lancer en développement (Web & Backend)
 
 ```bash
 npm run dev
 ```
+> L'application Web sera accessible sur `http://localhost:5173`.
+> L'API REST écoutera sur `http://localhost:3000`.
 
-L'application sera accessible sur `http://localhost:5173` (frontend) et les endpoints API sur `http://localhost:3000`.
+### 4. Lancer l'application Mobile (Flutter)
+
+Dans un nouveau terminal, placez-vous dans le répertoire mobile et lancez :
+```bash
+cd mobile
+flutter pub get
+flutter run
+```
 
 ---
 
-## 📖 Scripts disponibles
+## 📖 Scripts npm disponibles
 
 | Commande | Description |
 |----------|-------------|
-| `npm run dev` | Lancement local (frontend + backend simultanément) |
-| `npm run typecheck` | Vérification TypeScript stricte |
-| `npm test` | Exécution des tests unitaires |
-| `npm run build` | Build client + serveur pour production |
-| `npm run build:full` | **Build complet** (typecheck + tests + build) ⭐ |
-| `npm start` | Démarrage du serveur de production |
-
-### 💡 Recommandation
-
-Avant tout déploiement, utilisez `npm run build:full` pour garantir que votre code passe tous les contrôles de qualité.
+| `npm run dev` | Lancement local en mode watch (Frontend + Backend simultanément). |
+| `npm run typecheck` | Vérification stricte TypeScript sur l'ensemble du code. |
+| `npm test` | Exécution de la suite de tests unitaires et d'intégration (Vitest). |
+| `npm run build` | Génération des bundles optimisés pour la production (Client + Serveur). |
+| `npm run build:full` | **Build complet et sécurisé** (Exécute d'abord le typecheck et les tests avant de build). ⭐ |
+| `npm start` | Démarrage du serveur compilé pour la production. |
 
 ---
 
 ## 🌐 Déploiement serveur
 
-### Étapes de déploiement
+L'application est conçue pour fonctionner comme un serveur **Node.js unique** servant à la fois l'API et la SPA React.
 
-1. **Installer les dépendances en mode production**
-
+1. Installez les dépendances propres à la production :
    ```bash
    npm ci
    ```
-
-2. **Générer les artefacts (build complet avec vérifications)**
-
+2. Compilez le projet via le script complet :
    ```bash
    npm run build:full
    ```
-
-3. **Démarrer l'application**
-
+3. Lancez le service :
    ```bash
    npm start
    ```
 
-### Scripts de déploiement automatisés
-
-Des scripts sont disponibles dans le dossier `scripts/` pour faciliter la gestion sur serveur :
-
-- **`./scripts/deploy.sh`** : Déploiement complet (sync, install, build, start).
-- **`./scripts/push.sh`** : Mise à jour du code uniquement (préserve la base de données et le fichier `.env` du serveur).
-
-### Architecture de déploiement
-
-L'application est un serveur **Node.js unique** qui :
-
-- Sert la Single Page Application (SPA) React
-- Expose les endpoints API REST
-- Gère la base de données SQLite (Configurable via `DB_PATH`)
-- Peut être déployé sur Heroku, Railway, Render, VPS, etc.
+*Des scripts automatisés (`scripts/deploy.sh`, `scripts/push.sh`) sont également disponibles pour automatiser les mises à jour sur votre VPS.*
 
 ---
 
-## 🔐 Comptes de test
+## 🔐 Comptes de test (Auto-détection)
 
-> ℹ️ Le système de login détecte automatiquement le type de compte selon le numéro/identifiant.
+Le système de login détermine automatiquement votre rôle en fonction de votre numéro de téléphone.
 
-| Type | Identifiant | PIN | Rôle |
-|------|-------------|-----|------|
-| **Standard** | `+237 600000001` | `1234` | Patient |
-| **Professionnel** | `+237 612345678` | `1234` | Médecin/Professionnel de santé |
-| **Pharmacien** | `+237 699999999` | `1234` | Gestionnaire de pharmacie |
-| **Administrateur** | *Configurable* (`ADMIN_PHONE`) | *Configurable* (`ADMIN_PIN`) | Admin système |
-
-### Utilisation
-
-- Utilisez ces comptes pour tester les différentes fonctionnalités selon le rôle
-- Les données de test sont présentes dans la base SQLite
-
----
-
-## 📊 Import de médicaments
-
-### Fichier de référence
-
-Un fichier CSV prêt à l'import est fourni : **`data/medicaments_import_bd.csv`**
-
-### Colonnes compatibles (schéma table `Medicaments`)
-
-| Colonne | Description |
-|---------|-------------|
-| `nom` | Nom du médicament |
-| `dose_par_defaut` | Dose par défaut prescrite |
-| `id_unite_par_defaut` | Unité de dosage (mg, ml, etc.) |
-| `description` | Description détaillée |
-| `photo_url` | URL de la photo du produit |
-| `prix` | Prix unitaire |
-| `date_ajout` | Date d'ajout au catalogue |
-| `type_utilisation` | Type d'utilisation |
-| `mode_administration` | Mode d'administration (oral, injectable, etc.) |
-| `moment_repas` | Moment de prise par rapport aux repas |
-| `precaution_alimentaire` | Restrictions alimentaires |
-
-### Comment importer
-
-1. Accédez à la section administration
-2. Utilisez l'outil d'import CSV
-3. Sélectionnez le fichier `data/medicaments_import_bd.csv`
-4. Vérifiez les données et validez l'import
+| Type | Identifiant (Téléphone) | PIN | Rôle |
+|------|--------------------------|-----|------|
+| **Standard** | `+237 600000001` | `1234` | Patient (Tableau de bord patient, rappels persos) |
+| **Professionnel** | `+237 612345678` | `1234` | Médecin (Création d'ordonnances pour d'autres) |
+| **Pharmacien** | `+237 699999999` | `1234` | Gestionnaire de stock et d'officine |
+| **Administrateur** | *Configurable via env* | *Idem* | Gestion complète de la plateforme |
 
 ---
 
@@ -182,53 +137,27 @@ Un fichier CSV prêt à l'import est fourni : **`data/medicaments_import_bd.csv`
 
 ```
 TAKYMED/
-├── src/
-│   ├── client/          # Frontend React
-│   ├── server/          # Backend Express
-│   └── shared/          # Types partagés (api.ts)
-├── data/                # Fichiers de données (CSV, etc.)
-├── dist/                # Build output
-├── package.json
-└── README.md
+├── client/              # Code source Frontend Web (React + TS)
+├── server/              # Code source API Backend (Express + TS)
+├── shared/              # Modèles et Types partagés (api.ts)
+├── mobile/              # Code source Application Native (Flutter)
+├── data/                # Fichiers d'import (CSV, etc.)
+├── scripts/             # Scripts Bash d'automatisation et de déploiement
+├── dist/                # Fichiers compilés (généré au build)
+└── package.json
 ```
 
 ---
 
 ## 🤝 Contribution
 
-Les contributions sont bienvenues ! Pour contribuer :
-
-1. Fork le repository
-2. Créez une branche (`git checkout -b feature/ma-feature`)
-3. Committez vos changements (`git commit -m 'Ajout de ma feature'`)
-4. Poussez la branche (`git push origin feature/ma-feature`)
-5. Ouvrez une Pull Request
+1. **Fork** le repository.
+2. Créez votre branche de fonctionnalité : `git checkout -b feature/ma-nouvelle-fonctionnalite`
+3. Validez vos changements : `git commit -m 'Ajout d'une fonctionnalité'`
+4. Poussez sur la branche : `git push origin feature/ma-nouvelle-fonctionnalite`
+5. Ouvrez une **Pull Request**.
 
 ---
 
-## 📝 License
-
-Ce projet est distribué sous licence [à spécifier].
-
----
-
-## 📞 Support
-
-Pour toute question ou problème :
-
-- 📧 Ouverture d'une **issue** sur GitHub
-- 💬 Discussion dans les **Discussions** du repository
-
----
-
-## 🎓 Ressources utiles
-
-- [Documentation React](https://react.dev)
-- [Express.js Guide](https://expressjs.com)
-- [Vite Documentation](https://vitejs.dev)
-- [TailwindCSS](https://tailwindcss.com)
-- [SQLite Documentation](https://www.sqlite.org)
-
----
-
-**Dernière mise à jour**: 2026-03-11
+**TAKYMED** - *Votre santé entre de bonnes mains.*
+Dernière mise à jour: Juin 2026

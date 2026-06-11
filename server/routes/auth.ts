@@ -68,7 +68,7 @@ async function sendPinSms(phone: string, pin: string, context: "register" | "reg
 
 // Register route
 router.post("/register", async (req, res) => {
-  const { phone, type, name, pin: clientPin } = req.body;
+  const { phone, type, name, pin: clientPin, email } = req.body;
 
   try {
     const normalizedPhone = normalizePhone(typeof phone === "string" ? phone : "");
@@ -103,12 +103,13 @@ router.post("/register", async (req, res) => {
     const info = db
       .prepare(
         `
-          INSERT INTO Utilisateurs (numero_telephone, pin_hash, pin_expires_at, pin_updated_at, id_type_compte, est_pharmacien, est_valide)
-          VALUES (?, ?, ?, ?, ?, ?, 1)
+          INSERT INTO Utilisateurs (numero_telephone, email, pin_hash, pin_expires_at, pin_updated_at, id_type_compte, est_pharmacien, est_valide)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 1)
         `,
       )
       .run(
         normalizedPhone,
+        email && email.trim() !== "" ? email.trim() : null,
         pin,
         expiresAt,
         updatedAt,
@@ -286,7 +287,7 @@ router.post("/upgrade-request", (req, res) => {
     return res.status(401).json({ error: "Non authentifié" });
   }
 
-  if (!requestedType || !["Pro", "Professionnel", "Commercial"].includes(requestedType)) {
+  if (!requestedType || !["Standard", "standard", "Pro", "Professionnel", "Commercial"].includes(requestedType)) {
     return res.status(400).json({ error: "Type de compte invalide" });
   }
 
@@ -313,7 +314,7 @@ router.post("/upgrade-request", (req, res) => {
 });
 
 router.patch("/profile", (req, res) => {
-  const { name, phone } = req.body;
+  const { name, phone, email } = req.body;
   const userId = req.headers["x-user-id"];
 
   if (!userId) {
@@ -353,6 +354,24 @@ router.patch("/profile", (req, res) => {
           "UPDATE Utilisateurs SET numero_telephone = ? WHERE id_utilisateur = ?",
         ).run(normalizedPhone, userId);
       }
+
+      if (email !== undefined) {
+        const cleanEmail = email.trim() === "" ? null : email.trim();
+        if (cleanEmail) {
+          const existingUser = db
+            .prepare(
+              "SELECT id_utilisateur FROM Utilisateurs WHERE email = ? AND id_utilisateur <> ?",
+            )
+            .get(cleanEmail, userId);
+
+          if (existingUser) {
+            throw new Error("EMAIL_TAKEN");
+          }
+        }
+        db.prepare(
+          "UPDATE Utilisateurs SET email = ? WHERE id_utilisateur = ?",
+        ).run(cleanEmail, userId);
+      }
     });
 
     transaction();
@@ -361,6 +380,11 @@ router.patch("/profile", (req, res) => {
     if (error instanceof Error && error.message === "PHONE_TAKEN") {
       return res.status(409).json({
         error: "Ce numéro de téléphone est déjà utilisé par un autre compte",
+      });
+    }
+    if (error instanceof Error && error.message === "EMAIL_TAKEN") {
+      return res.status(409).json({
+        error: "Cette adresse e-mail est déjà utilisée par un autre compte",
       });
     }
     console.error("Profile update error:", error);

@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { GlobalAdRails } from "@/components/GlobalAdRails";
 import { AccountAvatar } from "@/components/AccountAvatar";
+import { SubscriptionModal } from "@/components/SubscriptionModal";
 import {
   isNavRouteActive,
   type NavMatchMode,
@@ -59,6 +60,7 @@ export function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
 
   const primaryNavItems = useMemo<NavItem[]>(() => {
     if (!user) {
@@ -282,6 +284,15 @@ export function Layout({ children }: LayoutProps) {
                     <LayoutDashboard className="h-4 w-4" />
                     {t("nav.dashboard")}
                   </DropdownMenuItem>
+                  {user.type !== "admin" && (
+                    <DropdownMenuItem
+                      className="cursor-pointer gap-2"
+                      onClick={() => setIsSubscriptionModalOpen(true)}
+                    >
+                      <Crown className="h-4 w-4 text-amber-500" />
+                      Abonnements / Formules
+                    </DropdownMenuItem>
+                  )}
                   {user.type === "commercial" && (
                     <DropdownMenuItem
                       className="cursor-pointer gap-2"
@@ -466,6 +477,19 @@ export function Layout({ children }: LayoutProps) {
                               </Link>
                             </Button>
                           </SheetClose>
+                          {user.type !== "admin" && (
+                            <SheetClose asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-12 rounded-2xl border-white/80 bg-white/90 font-bold shadow-sm"
+                                onClick={() => setIsSubscriptionModalOpen(true)}
+                              >
+                                <Crown className="mr-2 h-4 w-4 text-amber-500" />
+                                Abonnements
+                              </Button>
+                            </SheetClose>
+                          )}
                           <Button
                             variant="destructive"
                             className="h-12 rounded-2xl font-bold shadow-sm"
@@ -568,6 +592,11 @@ export function Layout({ children }: LayoutProps) {
           © {new Date().getFullYear()} TAKYMED. {t("footer.rights")}
         </div>
       </footer>
+
+      <SubscriptionModal 
+        open={isSubscriptionModalOpen} 
+        onOpenChange={setIsSubscriptionModalOpen} 
+      />
     </div>
   );
 }

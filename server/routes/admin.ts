@@ -63,6 +63,7 @@ import {
     PROTECTED_ADMIN_PHONE_ERROR,
     PROTECTED_ADMIN_TYPE_ERROR,
 } from "../utils/protectedAdmin";
+import { getCronIntervalMs, setCronIntervalMs } from "../services/reminderWorker";
 
 // Middleware to check if user is admin
 router.use(verifyRole(["Administrateur"]));
@@ -597,7 +598,7 @@ router.get("/commercial-clients/:id", (req, res) => {
     const { id } = req.params;
     try {
         const clients = db.prepare(`
-            SELECT u.id_utilisateur as id, u.numero_telephone as phone, p.nom_complet as name, u.est_valide as isValid, u.cree_le as createdAt
+            SELECT u.id_utilisateur as id, u.email, u.numero_telephone as phone, p.nom_complet as name, u.est_valide as isValid, u.cree_le as createdAt
             FROM Utilisateurs u
             LEFT JOIN ProfilsUtilisateurs p ON u.id_utilisateur = p.id_utilisateur
             WHERE u.id_createur = ?
@@ -627,7 +628,7 @@ router.patch("/reassign-client", (req, res) => {
 router.get("/unassigned-clients", (_req, res) => {
     try {
         const clients = db.prepare(`
-            SELECT u.id_utilisateur as id, u.numero_telephone as phone, p.nom_complet as name, u.est_valide as isValid, u.cree_le as createdAt
+            SELECT u.id_utilisateur as id, u.email, u.numero_telephone as phone, p.nom_complet as name, u.est_valide as isValid, u.cree_le as createdAt
             FROM Utilisateurs u
             LEFT JOIN ProfilsUtilisateurs p ON u.id_utilisateur = p.id_utilisateur
             JOIN TypesComptes tc ON u.id_type_compte = tc.id_type_compte
@@ -643,7 +644,7 @@ router.get("/unassigned-clients", (_req, res) => {
 
 router.patch("/users/:id", (req, res) => {
     const { id } = req.params;
-    const { phone, name } = req.body;
+    const { phone, name, email } = req.body;
 
     try {
         const user = db.prepare("SELECT id_utilisateur FROM Utilisateurs WHERE id_utilisateur = ?").get(id);
@@ -655,8 +656,19 @@ router.patch("/users/:id", (req, res) => {
             return res.status(403).json({ error: PROTECTED_ADMIN_PHONE_ERROR });
         }
 
+        if (email) {
+            const existing = db.prepare("SELECT id_utilisateur FROM Utilisateurs WHERE email = ? AND id_utilisateur != ?").get(email, id);
+            if (existing) {
+                return res.status(400).json({ error: "Cette adresse email est déjà utilisée par un autre utilisateur." });
+            }
+        }
+
         if (phone) {
             db.prepare("UPDATE Utilisateurs SET numero_telephone = ? WHERE id_utilisateur = ?").run(phone, id);
+        }
+
+        if (email !== undefined) {
+            db.prepare("UPDATE Utilisateurs SET email = ? WHERE id_utilisateur = ?").run(email || null, id);
         }
 
         if (name !== undefined) {
@@ -674,6 +686,40 @@ router.patch("/users/:id", (req, res) => {
         console.error("Error updating user:", error);
         res.status(500).json({ error: "Failed to update user" });
     }
+});
+
+// Get current cron interval configuration
+router.get("/cron-config", (_req, res) => {
+    const intervalMs = getCronIntervalMs();
+    res.json({
+        intervalMs,
+        intervalSeconds: intervalMs / 1000,
+        intervalMinutes: intervalMs / 60000,
+        limits: { minSeconds: 30, maxMinutes: 60 },
+    });
+});
+
+// Update cron interval configuration
+router.put("/cron-config", (req, res) => {
+    const { intervalSeconds } = req.body;
+    const seconds = Number(intervalSeconds);
+
+    if (!Number.isFinite(seconds) || seconds < 30 || seconds > 3600) {
+        return res.status(400).json({
+            error: "L'intervalle doit être compris entre 30 secondes et 60 minutes (3600 secondes).",
+        });
+    }
+
+    setCronIntervalMs(seconds * 1000);
+    const actual = getCronIntervalMs();
+
+    console.log(`[Admin] Cron interval updated to ${actual / 1000}s by admin.`);
+    res.json({
+        success: true,
+        message: `Intervalle mis à jour : ${actual / 1000} secondes.`,
+        intervalMs: actual,
+        intervalSeconds: actual / 1000,
+    });
 });
 
 export const adminRouter = router;
