@@ -515,6 +515,40 @@ router.get("/pharmacies", (_req, res) => {
     }
 });
 
+// Add pharmacy
+router.post("/pharmacies", (req, res) => {
+    const { name, address, phone, pharmacienId } = req.body;
+    try {
+        db.prepare("INSERT INTO Pharmacies (nom_pharmacie, adresse, telephone, id_pharmacien) VALUES (?, ?, ?, ?)").run(name, address, phone, pharmacienId || null);
+        res.status(201).json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to add pharmacy" });
+    }
+});
+
+// Update pharmacy
+router.put("/pharmacies/:id", (req, res) => {
+    const { id } = req.params;
+    const { name, address, phone } = req.body;
+    try {
+        db.prepare("UPDATE Pharmacies SET nom_pharmacie = ?, adresse = ?, telephone = ? WHERE id_pharmacie = ?").run(name, address, phone, id);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to update pharmacy" });
+    }
+});
+
+// Delete pharmacy
+router.delete("/pharmacies/:id", (req, res) => {
+    const { id } = req.params;
+    try {
+        db.prepare("DELETE FROM Pharmacies WHERE id_pharmacie = ?").run(id);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to delete pharmacy" });
+    }
+});
+
 // List account upgrade requests
 router.get("/upgrade-requests", (_req, res) => {
     try {

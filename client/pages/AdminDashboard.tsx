@@ -351,6 +351,16 @@ export default function AdminDashboard() {
         }
     };
 
+    const handleDeletePharmacy = async (id: number) => {
+        if (!confirm("Supprimer cette pharmacie ?")) return;
+        const res = await fetch(`/api/admin/pharmacies/${id}`, { 
+            method: 'DELETE',
+            headers: { "x-user-id": user?.id?.toString() || "" }
+        });
+        if (res.ok) { toast.success("Pharmacie supprimée"); refreshData(); }
+        else toast.error("Erreur de suppression");
+    };
+
     const handleAddUser = async () => {
         if (!newUser.phone && !newUser.email) {
             toast.error("Veuillez fournir un email ou un téléphone");
@@ -1433,7 +1443,8 @@ export default function AdminDashboard() {
                                         <th className="px-6 py-4 text-xs font-extrabold uppercase text-slate-700 tracking-widest">Officine</th>
                                         <th className="px-6 py-4 text-xs font-extrabold uppercase text-slate-700 tracking-widest">Gérant</th>
                                         <th className="px-6 py-4 text-xs font-extrabold uppercase text-slate-700 tracking-widest">Contact & Adresse</th>
-                                        <th className="px-6 py-4 text-xs font-extrabold uppercase text-slate-700 tracking-widest text-right">Stock (Médicaments)</th>
+                                        <th className="px-6 py-4 text-xs font-extrabold uppercase text-slate-700 tracking-widest text-right">Stock</th>
+                                        <th className="px-6 py-4 text-xs font-extrabold uppercase text-slate-700 tracking-widest text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y" style={{ borderColor: "#f1f5f9" }}>
@@ -1456,6 +1467,16 @@ export default function AdminDashboard() {
                                             </td>
                                             <td className="px-6 py-4 text-sm text-slate-700 font-bold text-right">
                                                 {p.stockCount} article(s)
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="hover:bg-red-50 hover:text-red-500 rounded-xl"
+                                                    onClick={() => handleDeletePharmacy(p.id)}
+                                                >
+                                                    <Trash2 size={15} />
+                                                </Button>
                                             </td>
                                         </tr>
                                     ))}
