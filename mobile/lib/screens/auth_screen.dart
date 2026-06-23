@@ -505,10 +505,10 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget _buildPinForm() {
     return Column(
       children: [
-        // 6 cases PIN
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: List.generate(6, (i) => _PinBox(index: i, controller: _pinController)),
+        // Widget OTP : TextField invisible + 6 cases visuelles
+        _PinInputRow(
+          controller: _pinController,
+          onCompleted: _onSubmitPin,
         ),
         const SizedBox(height: 28),
         _PrimaryBtn(
@@ -720,7 +720,151 @@ class _OutlineBtn extends StatelessWidget {
   }
 }
 
-/// Cases PIN individuelles avec controller partagé.
+/// Saisie OTP : TextField invisible focusé + 6 cases visuelles.
+/// Le TextField est transparent et positionné en Stack sous les cases.
+class _PinInputRow extends StatefulWidget {
+  final TextEditingController controller;
+  final VoidCallback? onCompleted;
+  final int length;
+
+  const _PinInputRow({
+    required this.controller,
+    this.onCompleted,
+    this.length = 6,
+  });
+
+  @override
+  State<_PinInputRow> createState() => _PinInputRowState();
+}
+
+class _PinInputRowState extends State<_PinInputRow> {
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode();
+    widget.controller.addListener(_onChanged);
+    // Ouvrir le clavier automatiquement
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  void _onChanged() {
+    // Limiter à `length` chiffres
+    final text = widget.controller.text;
+    if (text.length > widget.length) {
+      widget.controller.text = text.substring(0, widget.length);
+      widget.controller.selection = TextSelection.collapsed(offset: widget.length);
+    }
+    setState(() {});
+    if (widget.controller.text.length == widget.length) {
+      _focusNode.unfocus();
+      widget.onCompleted?.call();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onChanged);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pin = widget.controller.text;
+
+    return GestureDetector(
+      onTap: () => _focusNode.requestFocus(),
+      child: Stack(
+        children: [
+          // ── TextField invisible qui reçoit la saisie ──
+          SizedBox(
+            height: 1,
+            child: TextField(
+              controller: widget.controller,
+              focusNode: _focusNode,
+              keyboardType: TextInputType.number,
+              maxLength: widget.length,
+              obscureText: false,
+              autofocus: true,
+              showCursor: false,
+              style: const TextStyle(color: Colors.transparent, fontSize: 1),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                counterText: '',
+                filled: false,
+              ),
+            ),
+          ),
+
+          // ── Cases visuelles ──
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: List.generate(widget.length, (i) {
+                final isFilled = i < pin.length;
+                final isActive = i == pin.length && _focusNode.hasFocus;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: 46,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: isFilled ? AppColors.primaryLight : AppColors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isActive
+                          ? AppColors.primary
+                          : isFilled
+                              ? AppColors.primary
+                              : AppColors.border,
+                      width: (isActive || isFilled) ? 2 : 1.5,
+                    ),
+                    boxShadow: isActive
+                        ? [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.18),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            )
+                          ]
+                        : null,
+                  ),
+                  child: Center(
+                    child: isFilled
+                        ? Container(
+                            width: 12,
+                            height: 12,
+                            decoration: const BoxDecoration(
+                              color: AppColors.primary,
+                              shape: BoxShape.circle,
+                            ),
+                          )
+                        : isActive
+                            ? Container(
+                                width: 2,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              )
+                            : null,
+                  ),
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Cases PIN individuelles — conservé pour compatibilité.
 class _PinBox extends StatefulWidget {
   final int index;
   final TextEditingController controller;
