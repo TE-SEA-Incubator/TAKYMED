@@ -8,13 +8,11 @@ import '../theme/app_colors.dart';
 import '../utils/med_helpers.dart';
 import '../widgets/gradient_header.dart';
 import '../widgets/page_transitions.dart';
-import '../widgets/primary_button.dart';
 import '../services/location_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/medication_image.dart';
 import 'create_prescription_screen.dart';
 import 'search_pharmacies_screen.dart';
-import '../widgets/page_transitions.dart';
 
 class SearchMedicationsScreen extends StatefulWidget {
   final bool embedded;
@@ -43,8 +41,10 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
   bool _loading = false;
   bool _aiLoading = false;
   Map<String, dynamic>? _aiResult;
+  String? _aiErrorMessage;
   List<int> _bookmarks = [];
   Timer? _debounce;
+  String _lastAiQuery = '';
   static const _maxResults = 40;
 
   @override
@@ -52,11 +52,17 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
     super.initState();
     _fetchInteractions();
     _loadBookmarks();
-    _pharmacyFilterController.addListener(() => setState(() {}));
+    _pharmacyFilterController.addListener(_onPharmacyFilterChanged);
+  }
+
+  void _onPharmacyFilterChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
+    _pharmacyFilterController.removeListener(_onPharmacyFilterChanged);
     _searchController.dispose();
     _pharmacyFilterController.dispose();
     super.dispose();
@@ -65,7 +71,7 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
   Future<void> _loadBookmarks() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getStringList('med_bookmarks');
-    if (saved != null) {
+    if (saved != null && mounted) {
       setState(() {
         _bookmarks = saved.map((e) => int.parse(e)).toList();
       });
@@ -74,6 +80,7 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
 
   Future<void> _toggleBookmark(int id) async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       if (_bookmarks.contains(id)) {
         _bookmarks.remove(id);
@@ -102,16 +109,26 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
     try {
       final api = Provider.of<ApiService>(context, listen: false);
       final data = await api.getInteractions();
-      setState(() {
-        _interactions = data['interactions'] ?? [];
-      });
+      if (mounted) {
+        setState(() {
+          _interactions = data['interactions'] ?? [];
+        });
+      }
     } catch (e) {
       // Ignore errors for now
     }
   }
 
+  void _scheduleSearch() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 450), () {
+      if (!mounted) return;
+      _runSearch();
+    });
+  }
+
   // Manual search trigger
-  Future<void> _runSearch({bool isRetry = false}) async {
+  Future<void> _runSearch() async {
     if (!mounted) return;
     final query = _searchController.text.trim();
 
@@ -121,69 +138,89 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
         _medications = [];
         _selectedMed = null;
         _aiResult = null;
+        _aiErrorMessage = null;
+        _lastAiQuery = '';
       });
       return;
     }
 
     setState(() {
-      if (!isRetry) _loading = true;
+      _loading = true;
       _selectedMed = null;
       _aiResult = null;
+      _aiErrorMessage = null;
     });
 
     try {
       final api = Provider.of<ApiService>(context, listen: false);
       final data = await api.searchMedications(query);
       final raw = (data['medications'] as List<dynamic>?) ?? [];
-      
-      if (raw.isEmpty && !isRetry) {
-        // Fallback to AI silently
-        try {
-            await api.searchMedicationWithAI(query);
-        } catch (e) {
-            debugPrint('AI fallback failed: $e');
-        }
-        // Retry search from DB after AI persistent insertion
-        _runSearch(isRetry: true);
+
+      if (!mounted) return;
+
+      if (raw.isEmpty) {
+        setState(() {
+          _medications = [];
+        });
+        await _searchWithAI(forcedQuery: query, silent: true);
         return;
       }
-      
-      if (!mounted) return;
+
       setState(() {
         _medications = raw.take(_maxResults).toList();
+        _lastAiQuery = '';
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _medications = []);
+      setState(() {
+        _medications = [];
+        _aiResult = null;
+        _aiErrorMessage = null;
+      });
     } finally {
-      if (mounted && !isRetry) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
-  Future<void> _searchWithAI() async {
-    final query = _searchController.text.trim();
-    if (query.length < 2) return;
+  Future<void> _searchWithAI({String? forcedQuery, bool silent = false}) async {
+    final query = (forcedQuery ?? _searchController.text).trim();
+    if (query.length < 2 || _aiLoading) return;
+    if (_lastAiQuery == query && _aiResult != null) return;
+
     setState(() {
       _aiLoading = true;
       _aiResult = null;
+      _aiErrorMessage = null;
+      _lastAiQuery = query;
     });
     try {
       final api = Provider.of<ApiService>(context, listen: false);
       final data = await api.searchMedicationWithAI(query);
+      if (!mounted) return;
       setState(() {
-        _aiResult = data['aiResult'];
+        _aiResult = data['aiResult'] as Map<String, dynamic>?;
       });
     } catch (e) {
-      if (mounted) {
+      if (!mounted) return;
+      final message = e.toString().replaceFirst('Exception: ', '').trim();
+      setState(() {
+        _aiErrorMessage = message.isEmpty
+            ? 'Recherche IA indisponible'
+            : message;
+      });
+      if (!silent) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('IA: $e')));
+        ).showSnackBar(SnackBar(content: Text(_aiErrorMessage!)));
       }
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _aiLoading = false;
         });
+      }
     }
   }
 
@@ -900,6 +937,7 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                       controller: _searchController,
                       style: const TextStyle(fontSize: 18),
                       textInputAction: TextInputAction.search,
+                      onChanged: (_) => _scheduleSearch(),
                       onSubmitted: (_) => _runSearch(),
                       decoration: const InputDecoration(
                         hintText: 'Rechercher un médicament…',
@@ -909,7 +947,10 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.search_rounded),
-                    onPressed: () => _runSearch(),
+                    onPressed: () {
+                      _debounce?.cancel();
+                      _runSearch();
+                    },
                   ),
                   if (_loading)
                     const Padding(
@@ -1186,6 +1227,23 @@ class _SearchMedicationsScreenState extends State<SearchMedicationsScreen> {
                     ),
                   ),
                 ),
+                if (_aiLoading)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 12),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                if (_aiErrorMessage != null)
+                  Card(
+                    margin: const EdgeInsets.only(top: 12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        _aiErrorMessage!,
+                        style: const TextStyle(color: AppColors.warning),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
                 // AI result card
                 if (_aiResult != null) _buildAIResultCard(_aiResult!),
               ],

@@ -7,6 +7,7 @@ import 'auth_exception.dart';
 
 class ApiService {
   static const String baseUrl = 'http://82.165.150.150:3500/api';
+
   /// Origine du serveur (sans /api) pour les assets statiques (/uploads/...).
   static const String serverOrigin = 'http://82.165.150.150:3500';
 
@@ -19,7 +20,10 @@ class ApiService {
     throw Exception('Réponse serveur invalide (JSON attendu)');
   }
 
-  String _apiErrorMessage(http.Response response, {String fallback = 'Erreur serveur'}) {
+  String _apiErrorMessage(
+    http.Response response, {
+    String fallback = 'Erreur serveur',
+  }) {
     final contentType = response.headers['content-type'] ?? '';
     if (contentType.contains('application/json')) {
       try {
@@ -27,7 +31,8 @@ class ApiService {
         if (data['error'] != null) return data['error'].toString();
       } catch (_) {}
     }
-    if (response.body.contains('<!DOCTYPE') || response.body.contains('<html')) {
+    if (response.body.contains('<!DOCTYPE') ||
+        response.body.contains('<html')) {
       return 'Endpoint indisponible sur le serveur (${response.statusCode})';
     }
     return '$fallback (${response.statusCode})';
@@ -59,12 +64,20 @@ class ApiService {
     };
   }
 
-  Future<Map<String, dynamic>> login(String phone, String type, String pin) async {
+  Future<Map<String, dynamic>> login(
+    String phone,
+    String type,
+    String pin,
+  ) async {
     final normalizedPhone = _normalizeAuthPhone(phone);
     final response = await http.post(
       Uri.parse('$baseUrl/auth/login'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone': normalizedPhone, 'type': type, 'pin': pin.trim()}),
+      body: jsonEncode({
+        'phone': normalizedPhone,
+        'type': type,
+        'pin': pin.trim(),
+      }),
     );
 
     if (response.statusCode == 200) {
@@ -82,7 +95,9 @@ class ApiService {
         if (e is AuthException) rethrow;
       }
     }
-    throw AuthException(_apiErrorMessage(response, fallback: 'Échec de la connexion'));
+    throw AuthException(
+      _apiErrorMessage(response, fallback: 'Échec de la connexion'),
+    );
   }
 
   Future<Map<String, dynamic>> getOrdonnances(int userId) async {
@@ -98,9 +113,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getOrdonnanceDetails(int id) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/ordonnances/$id'),
-    );
+    final response = await http.get(Uri.parse('$baseUrl/ordonnances/$id'));
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
@@ -117,7 +130,9 @@ class ApiService {
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
-      throw Exception('Échec de la récupération des données du tableau de bord');
+      throw Exception(
+        'Échec de la récupération des données du tableau de bord',
+      );
     }
   }
 
@@ -167,7 +182,7 @@ class ApiService {
     final stopwatch = Stopwatch()..start();
     final response = await http.get(Uri.parse('$baseUrl/ping'));
     stopwatch.stop();
-    
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       return '${data['message']} (${stopwatch.elapsedMilliseconds}ms)';
@@ -237,7 +252,9 @@ class ApiService {
       }),
     );
     if (response.statusCode != 200) {
-      throw Exception(jsonDecode(response.body)['error'] ?? 'Échec de la sauvegarde');
+      throw Exception(
+        jsonDecode(response.body)['error'] ?? 'Échec de la sauvegarde',
+      );
     }
   }
 
@@ -264,10 +281,13 @@ class ApiService {
     }
   }
 
-  Future<List<dynamic>> getPendingPushNotifications(int userId, {String? since}) async {
-    final uri = Uri.parse('$baseUrl/notifications/pending-push').replace(
-      queryParameters: since != null ? {'since': since} : null,
-    );
+  Future<List<dynamic>> getPendingPushNotifications(
+    int userId, {
+    String? since,
+  }) async {
+    final uri = Uri.parse(
+      '$baseUrl/notifications/pending-push',
+    ).replace(queryParameters: since != null ? {'since': since} : null);
     final response = await http.get(
       uri,
       headers: {'x-user-id': userId.toString()},
@@ -308,7 +328,10 @@ class ApiService {
     if (response.statusCode == 201 || response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
-      throw Exception(jsonDecode(response.body)['error'] ?? 'Échec de la création de l\'ordonnance');
+      throw Exception(
+        jsonDecode(response.body)['error'] ??
+            'Échec de la création de l\'ordonnance',
+      );
     }
   }
 
@@ -318,7 +341,9 @@ class ApiService {
       final data = _decodeJsonMap(response);
       final list = data['countries'] as List<dynamic>? ?? [];
       return list
-          .map((c) => CountryOption.fromJson(Map<String, dynamic>.from(c as Map)))
+          .map(
+            (c) => CountryOption.fromJson(Map<String, dynamic>.from(c as Map)),
+          )
           .toList();
     }
     return [CountryOption.fallback];
@@ -330,7 +355,11 @@ class ApiService {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/register'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone': normalizedPhone, 'type': type, if (email != null && email.isNotEmpty) 'email': email}),
+      body: jsonEncode({
+        'phone': normalizedPhone,
+        'type': type,
+        if (email != null && email.isNotEmpty) 'email': email,
+      }),
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) {
@@ -338,7 +367,9 @@ class ApiService {
       return data['message']?.toString() ??
           'Compte créé. Votre PIN a été envoyé par SMS.';
     }
-    throw Exception(_apiErrorMessage(response, fallback: 'Échec de l\'inscription'));
+    throw Exception(
+      _apiErrorMessage(response, fallback: 'Échec de l\'inscription'),
+    );
   }
 
   Future<String> forgotPin(String phone) async {
@@ -351,9 +382,12 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final data = _decodeJsonMap(response);
-      return data['message']?.toString() ?? 'Un nouveau PIN a été envoyé par SMS';
+      return data['message']?.toString() ??
+          'Un nouveau PIN a été envoyé par SMS';
     }
-    throw Exception(_apiErrorMessage(response, fallback: 'Échec de la demande'));
+    throw Exception(
+      _apiErrorMessage(response, fallback: 'Échec de la demande'),
+    );
   }
 
   String _normalizeAuthPhone(String phone) {
@@ -364,18 +398,30 @@ class ApiService {
     return PhoneUtils.normalizeCameroon(trimmed);
   }
 
-  Future<void> updateProfile(int userId, String name, String phone, {String? email}) async {
+  Future<void> updateProfile(
+    int userId,
+    String name,
+    String phone, {
+    String? email,
+  }) async {
     final response = await http.patch(
       Uri.parse('$baseUrl/auth/profile'),
       headers: {
         'Content-Type': 'application/json',
         'x-user-id': userId.toString(),
       },
-      body: jsonEncode({'name': name, 'phone': phone, if (email != null && email.isNotEmpty) 'email': email}),
+      body: jsonEncode({
+        'name': name,
+        'phone': phone,
+        if (email != null && email.isNotEmpty) 'email': email,
+      }),
     );
 
     if (response.statusCode != 200) {
-      throw Exception(jsonDecode(response.body)['error'] ?? 'Échec de la mise à jour du profil');
+      throw Exception(
+        jsonDecode(response.body)['error'] ??
+            'Échec de la mise à jour du profil',
+      );
     }
   }
 
@@ -387,23 +433,32 @@ class ApiService {
     if (response.statusCode == 200) {
       return _decodeJsonMap(response);
     }
-    throw Exception(_apiErrorMessage(response, fallback: 'Échec de la recherche de médicaments'));
+    throw Exception(
+      _apiErrorMessage(
+        response,
+        fallback: 'Échec de la recherche de médicaments',
+      ),
+    );
   }
 
   Future<Map<String, dynamic>> searchMedicationWithAI(String name) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/medications/ai-info?name=${Uri.encodeComponent(name)}'),
+      Uri.parse(
+        '$baseUrl/medications/ai-info?name=${Uri.encodeComponent(name)}',
+      ),
     );
 
     if (response.statusCode == 200) {
       return _decodeJsonMap(response);
     }
-    throw Exception(_apiErrorMessage(response, fallback: 'Recherche IA indisponible'));
+    throw Exception(
+      _apiErrorMessage(response, fallback: 'Recherche IA indisponible'),
+    );
   }
 
   Future<List<dynamic>> getAllPharmacies() async {
     final uri = Uri.parse('$baseUrl/pharmacies/all');
-    
+
     try {
       final response = await http.get(uri).timeout(const Duration(seconds: 15));
 
@@ -434,7 +489,11 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> searchPharmacies(int medId, {double? lat, double? lng}) async {
+  Future<Map<String, dynamic>> searchPharmacies(
+    int medId, {
+    double? lat,
+    double? lng,
+  }) async {
     String url = '$baseUrl/pharmacies/search?medId=$medId';
     if (lat != null && lng != null) {
       url += '&lat=$lat&lng=$lng';
@@ -444,7 +503,12 @@ class ApiService {
     if (response.statusCode == 200) {
       return _decodeJsonMap(response);
     }
-    throw Exception(_apiErrorMessage(response, fallback: 'Échec de la recherche de pharmacies'));
+    throw Exception(
+      _apiErrorMessage(
+        response,
+        fallback: 'Échec de la recherche de pharmacies',
+      ),
+    );
   }
 
   /// Recherche unifiée : stock + pharmacies de garde, triées par proximité.
@@ -461,18 +525,24 @@ class ApiService {
     }
     if (medId != null) params['medId'] = medId.toString();
 
-    final uri = Uri.parse('$baseUrl/pharmacies/nearby').replace(queryParameters: params);
-    
+    final uri = Uri.parse(
+      '$baseUrl/pharmacies/nearby',
+    ).replace(queryParameters: params);
+
     try {
       final response = await http.get(uri).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         return _normalizeNearbyPharmacies(_decodeJsonMap(response));
       } else {
-        throw Exception('Erreur serveur (${response.statusCode}): ${response.body}');
+        throw Exception(
+          'Erreur serveur (${response.statusCode}): ${response.body}',
+        );
       }
     } on TimeoutException {
-      throw Exception('La connexion au serveur a expiré (Timeout). Vérifiez votre connexion.');
+      throw Exception(
+        'La connexion au serveur a expiré (Timeout). Vérifiez votre connexion.',
+      );
     } on http.ClientException catch (e) {
       throw Exception('Erreur réseau: Impossible de joindre le serveur. $e');
     } catch (e) {
@@ -492,7 +562,9 @@ class ApiService {
       'phone': clientPhone,
       if (excludeUserId != null) 'excludeUserId': excludeUserId.toString(),
     };
-    final uri = Uri.parse('$baseUrl/commercial/check-client').replace(queryParameters: params);
+    final uri = Uri.parse(
+      '$baseUrl/commercial/check-client',
+    ).replace(queryParameters: params);
     final response = await http.get(
       uri,
       headers: {'x-user-id': commercialId.toString()},
@@ -503,10 +575,20 @@ class ApiService {
     }
 
     final body = jsonDecode(response.body);
-    throw Exception(body is Map ? (body['error'] ?? 'Vérification impossible') : 'Vérification impossible');
+    throw Exception(
+      body is Map
+          ? (body['error'] ?? 'Vérification impossible')
+          : 'Vérification impossible',
+    );
   }
 
-  Future<Map<String, dynamic>> registerCommercialClient(int commercialId, String clientName, String clientPhone, Map<String, dynamic> prescription, String? startDate) async {
+  Future<Map<String, dynamic>> registerCommercialClient(
+    int commercialId,
+    String clientName,
+    String clientPhone,
+    Map<String, dynamic> prescription,
+    String? startDate,
+  ) async {
     final response = await http.post(
       Uri.parse('$baseUrl/commercial/register-client'),
       headers: {
@@ -527,7 +609,11 @@ class ApiService {
       return body is Map<String, dynamic> ? body : {'success': true};
     }
 
-    throw Exception(body is Map ? (body['error'] ?? 'Échec de l\'inscription du client') : 'Échec de l\'inscription du client');
+    throw Exception(
+      body is Map
+          ? (body['error'] ?? 'Échec de l\'inscription du client')
+          : 'Échec de l\'inscription du client',
+    );
   }
 
   Future<Map<String, dynamic>> validateCommercialClient(
@@ -555,7 +641,11 @@ class ApiService {
       return body is Map<String, dynamic> ? body : {'success': true};
     }
 
-    throw Exception(body is Map ? (body['error'] ?? 'Échec de la validation du client') : 'Échec de la validation du client');
+    throw Exception(
+      body is Map
+          ? (body['error'] ?? 'Échec de la validation du client')
+          : 'Échec de la validation du client',
+    );
   }
 
   Future<List<dynamic>> getCommercialClients(int commercialId) async {
@@ -586,7 +676,11 @@ class ApiService {
     }
   }
 
-  Future<void> updateClientName(int commercialId, int clientId, String newName) async {
+  Future<void> updateClientName(
+    int commercialId,
+    int clientId,
+    String newName,
+  ) async {
     final response = await http.patch(
       Uri.parse('$baseUrl/commercial/clients/$clientId'),
       headers: {
@@ -603,7 +697,9 @@ class ApiService {
 
   Future<void> deleteClient(int commercialId, int clientId) async {
     final response = await http.delete(
-      Uri.parse('$baseUrl/commercial/clients/$clientId?commercialId=$commercialId'),
+      Uri.parse(
+        '$baseUrl/commercial/clients/$clientId?commercialId=$commercialId',
+      ),
       headers: {'x-user-id': commercialId.toString()},
     );
 
@@ -612,7 +708,11 @@ class ApiService {
     }
   }
 
-  Future<void> sendMessageToClient(int commercialId, int clientId, String message) async {
+  Future<void> sendMessageToClient(
+    int commercialId,
+    int clientId,
+    String message,
+  ) async {
     final response = await http.post(
       Uri.parse('$baseUrl/commercial/send-message'),
       headers: {
@@ -628,7 +728,11 @@ class ApiService {
 
     if (response.statusCode != 200) {
       final body = jsonDecode(response.body);
-      throw Exception(body is Map ? (body['error'] ?? 'Échec de l\'envoi') : 'Échec de l\'envoi');
+      throw Exception(
+        body is Map
+            ? (body['error'] ?? 'Échec de l\'envoi')
+            : 'Échec de l\'envoi',
+      );
     }
   }
 
@@ -655,7 +759,10 @@ class ApiService {
     );
 
     if (response.statusCode != 200) {
-      final err = _apiErrorMessage(response, fallback: 'Échec de la mise à jour de l\'ordonnance');
+      final err = _apiErrorMessage(
+        response,
+        fallback: 'Échec de la mise à jour de l\'ordonnance',
+      );
       throw Exception(err);
     }
   }
@@ -683,17 +790,23 @@ class ApiService {
   Future<void> deleteOrdonnance(int id, {int? userId}) async {
     final response = await http.delete(
       Uri.parse('$baseUrl/ordonnances/$id'),
-      headers: {
-        if (userId != null) 'x-user-id': userId.toString(),
-      },
+      headers: {if (userId != null) 'x-user-id': userId.toString()},
     );
 
     if (response.statusCode != 200) {
-      throw Exception(_apiErrorMessage(response, fallback: 'Échec de la suppression de l\'ordonnance'));
+      throw Exception(
+        _apiErrorMessage(
+          response,
+          fallback: 'Échec de la suppression de l\'ordonnance',
+        ),
+      );
     }
   }
 
-  Future<void> addMedicament(int ordonnanceId, Map<String, dynamic> data) async {
+  Future<void> addMedicament(
+    int ordonnanceId,
+    Map<String, dynamic> data,
+  ) async {
     final response = await http.post(
       Uri.parse('$baseUrl/ordonnances/$ordonnanceId/medicaments'),
       headers: {'Content-Type': 'application/json'},
@@ -705,7 +818,11 @@ class ApiService {
     }
   }
 
-  Future<void> updateMedicament(int ordonnanceId, int elementId, Map<String, dynamic> data) async {
+  Future<void> updateMedicament(
+    int ordonnanceId,
+    int elementId,
+    Map<String, dynamic> data,
+  ) async {
     final response = await http.put(
       Uri.parse('$baseUrl/ordonnances/$ordonnanceId/medicaments/$elementId'),
       headers: {'Content-Type': 'application/json'},
@@ -749,22 +866,27 @@ class ApiService {
     throw Exception('Échec de la récupération des paramètres');
   }
 
-  Future<void> submitUpgradeRequest(int userId, String requestedType, {String? motive}) async {
+  Future<void> submitUpgradeRequest(
+    int userId,
+    String requestedType, {
+    String? motive,
+  }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/upgrade-request'),
       headers: {
         'Content-Type': 'application/json',
         'x-user-id': userId.toString(),
       },
-      body: jsonEncode({
-        'requestedType': requestedType,
-        'motive': motive,
-      }),
+      body: jsonEncode({'requestedType': requestedType, 'motive': motive}),
     );
 
     if (response.statusCode != 200) {
       final body = jsonDecode(response.body);
-      throw Exception(body is Map ? (body['error'] ?? 'Échec de la demande') : 'Échec de la demande');
+      throw Exception(
+        body is Map
+            ? (body['error'] ?? 'Échec de la demande')
+            : 'Échec de la demande',
+      );
     }
   }
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useNavigate } from "react-router-dom";
@@ -15,11 +15,20 @@ import {
   Navigation,
   Store,
   Phone,
+  Loader2,
 } from "lucide-react";
-import { cn, resolveMedicationPhotoUrl, formatPharmacyDistanceShort, pharmacyShortLocation } from "@/lib/utils";
+import {
+  cn,
+  resolveMedicationPhotoUrl,
+  formatPharmacyDistanceShort,
+  pharmacyShortLocation,
+} from "@/lib/utils";
 import { toast } from "sonner";
 import { PageShell } from "@/components/app/PageShell";
 import { PageHeader } from "@/components/app/PageHeader";
+
+const TEAL = "#006093";
+const EMERALD = "#00A859";
 
 export default function SearchMedications() {
   const { user } = useAuth();
@@ -31,29 +40,35 @@ export default function SearchMedications() {
   const [pharmaciesNearby, setPharmaciesNearby] = useState<any[]>([]);
   const [pharmaciesOnDuty, setPharmaciesOnDuty] = useState<any[]>([]);
   const [pharmacyTab, setPharmacyTab] = useState<"pharmacy" | "garde">("garde");
-  const [mainSection, setMainSection] = useState<"medications" | "pharmacies">("medications");
+  const [mainSection, setMainSection] = useState<"medications" | "pharmacies">(
+    "medications",
+  );
   const [pharmacyQuery, setPharmacyQuery] = useState("");
   const [loadingPharmacies, setLoadingPharmacies] = useState(false);
   const [locationCity, setLocationCity] = useState<string | null>(null);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
   const [isFindingLocation, setIsFindingLocation] = useState(false);
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState<any | null>(null);
   const [bookmarks, setBookmarks] = useState<number[]>([]);
+  const lastAiQueryRef = useRef("");
   const navigate = useNavigate();
 
   // Load bookmarks and interactions
   useEffect(() => {
     const saved = localStorage.getItem("med_bookmarks");
     if (saved) setBookmarks(JSON.parse(saved));
-    
+
     fetchInteractions();
   }, []);
 
   const fetchInteractions = async () => {
     try {
-      const res = await fetch('/api/medications/interactions');
+      const res = await fetch("/api/medications/interactions");
       if (res.ok) {
         const data = await res.json();
         setInteractions(data.interactions);
@@ -65,16 +80,29 @@ export default function SearchMedications() {
 
   const toggleBookmark = (id: number) => {
     const newBookmarks = bookmarks.includes(id)
-      ? bookmarks.filter(b => b !== id)
+      ? bookmarks.filter((b) => b !== id)
       : [...bookmarks, id];
     setBookmarks(newBookmarks);
     localStorage.setItem("med_bookmarks", JSON.stringify(newBookmarks));
-    toast.success(bookmarks.includes(id) ? "Supprimé des favoris" : "Ajouté aux favoris");
+    toast.success(
+      bookmarks.includes(id) ? "Supprimé des favoris" : "Ajouté aux favoris",
+    );
   };
 
   const handleAddToTreatment = () => {
     if (!selectedMed) return;
     navigate(`/prescription?med=${encodeURIComponent(selectedMed.name)}`);
+  };
+
+  const handleManualSearch = () => {
+    const q = query.trim();
+    if (!q) return;
+
+    lastAiQueryRef.current = "";
+
+    if (!loading && medications.length === 0) {
+      void searchWithAI(q);
+    }
   };
 
   // Fetch medications based on query
@@ -83,12 +111,15 @@ export default function SearchMedications() {
       if (!query.trim()) {
         setMedications([]);
         setAiResult(null);
+        lastAiQueryRef.current = "";
         return;
       }
       setLoading(true);
       setAiResult(null);
       try {
-        const res = await fetch(`/api/medications?q=${encodeURIComponent(query)}`);
+        const res = await fetch(
+          `/api/medications?q=${encodeURIComponent(query)}`,
+        );
         if (res.ok) {
           const data = await res.json();
           setMedications(data.medications);
@@ -104,18 +135,29 @@ export default function SearchMedications() {
 
   // Auto-trigger AI search when no meds found
   useEffect(() => {
-    if (!loading && medications.length === 0 && query.trim() && !aiResult) {
-      // Initiate AI search silently
-      searchWithAI();
-    }
-  }, [loading, medications, query]);
-  const searchWithAI = async () => {
     const q = query.trim();
-    if (q.length < 2) return;
+    if (loading || medications.length > 0 || !q || aiResult || aiLoading)
+      return;
+    if (lastAiQueryRef.current === q) return;
+
+    const timer = setTimeout(() => {
+      searchWithAI(q);
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [loading, medications, query, aiResult, aiLoading]);
+
+  const searchWithAI = async (forcedQuery?: string) => {
+    const q = (forcedQuery ?? query).trim();
+    if (q.length < 2 || aiLoading) return;
+
+    lastAiQueryRef.current = q;
     setAiLoading(true);
     setAiResult(null);
     try {
-      const res = await fetch(`/api/medications/ai-info?name=${encodeURIComponent(q)}`);
+      const res = await fetch(
+        `/api/medications/ai-info?name=${encodeURIComponent(q)}`,
+      );
       const contentType = res.headers.get("content-type") ?? "";
       if (!contentType.includes("application/json")) {
         throw new Error(`Réponse serveur invalide (${res.status})`);
@@ -148,10 +190,11 @@ export default function SearchMedications() {
   };
 
   // Filter interactions for current med
-  const relevantInteractions = selectedMed 
-    ? interactions.filter(i => 
-        i.med1Name.toLowerCase() === selectedMed.name.toLowerCase() || 
-        i.med2Name.toLowerCase() === selectedMed.name.toLowerCase()
+  const relevantInteractions = selectedMed
+    ? interactions.filter(
+        (i) =>
+          i.med1Name.toLowerCase() === selectedMed.name.toLowerCase() ||
+          i.med2Name.toLowerCase() === selectedMed.name.toLowerCase(),
       )
     : [];
 
@@ -171,7 +214,9 @@ export default function SearchMedications() {
         setPharmaciesNearby(normalized.allNearby);
         setPharmaciesOnDuty(normalized.onDuty);
         setLocationCity(normalized.city);
-      } else if (res.headers.get("content-type")?.includes("application/json")) {
+      } else if (
+        res.headers.get("content-type")?.includes("application/json")
+      ) {
         const err = await res.json();
         toast.error(err.error ?? "Erreur recherche pharmacies");
       }
@@ -187,7 +232,10 @@ export default function SearchMedications() {
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
+          const coords = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          };
           setUserLocation(coords);
           setIsFindingLocation(false);
           if (!silent) toast.success("Position récupérée !");
@@ -200,15 +248,18 @@ export default function SearchMedications() {
           setIsFindingLocation(false);
           if (silent) return;
           if (error.code === 1) {
-            toast.warning("Géolocalisation non disponible - utilisez localhost ou HTTPS");
+            toast.warning(
+              "Géolocalisation non disponible - utilisez localhost ou HTTPS",
+            );
           } else {
             toast.error("Impossible de récupérer votre position.");
           }
-        }
+        },
       );
     } else {
       setIsFindingLocation(false);
-      if (!silent) toast.error("Géolocalisation non supportée par votre navigateur.");
+      if (!silent)
+        toast.error("Géolocalisation non supportée par votre navigateur.");
     }
   };
 
@@ -226,8 +277,12 @@ export default function SearchMedications() {
     if (!q) return list;
     return list.filter(
       (p) =>
-        String(p.name ?? "").toLowerCase().includes(q) ||
-        String(p.address ?? "").toLowerCase().includes(q),
+        String(p.name ?? "")
+          .toLowerCase()
+          .includes(q) ||
+        String(p.address ?? "")
+          .toLowerCase()
+          .includes(q),
     );
   };
 
@@ -250,11 +305,15 @@ export default function SearchMedications() {
         className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3 text-left transition-colors hover:border-amber-200 hover:bg-amber-50/40"
       >
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-[11px] font-black leading-tight text-amber-600">
-          {p.distance != null ? formatPharmacyDistanceShort(p.distance) : index + 1}
+          {p.distance != null
+            ? formatPharmacyDistanceShort(p.distance)
+            : index + 1}
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate font-bold text-foreground">{p.name}</p>
-          <p className="truncate text-xs text-muted-foreground">{pharmacyShortLocation(p)}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {pharmacyShortLocation(p)}
+          </p>
         </div>
         {phone && (
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -275,11 +334,15 @@ export default function SearchMedications() {
         className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3 text-left transition-colors hover:border-primary/30 hover:bg-primary/5"
       >
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-[11px] font-black leading-tight text-primary">
-          {p.distance != null ? formatPharmacyDistanceShort(p.distance) : index + 1}
+          {p.distance != null
+            ? formatPharmacyDistanceShort(p.distance)
+            : index + 1}
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate font-bold text-foreground">{p.name}</p>
-          <p className="truncate text-xs text-muted-foreground">{pharmacyShortLocation(p)}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {pharmacyShortLocation(p)}
+          </p>
         </div>
         {phone && (
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -340,15 +403,21 @@ export default function SearchMedications() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t("search.searchPlaceholder")}
               className="h-14 border-none bg-transparent text-xl focus-visible:ring-0"
-              onKeyDown={(e) => e.key === 'Enter' && handleManualSearch()}
+              onKeyDown={(e) => e.key === "Enter" && handleManualSearch()}
             />
             <Button
               className="rounded-2xl h-10 px-6 font-bold"
-              style={{ background: `linear-gradient(135deg, ${TEAL}, ${EMERALD})` }}
+              style={{
+                background: `linear-gradient(135deg, ${TEAL}, ${EMERALD})`,
+              }}
               onClick={handleManualSearch}
               disabled={loading}
             >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Rechercher"}
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Rechercher"
+              )}
             </Button>
           </div>
 
@@ -375,18 +444,27 @@ export default function SearchMedications() {
                       <div
                         className={cn(
                           "flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl",
-                          selectedMed?.id === m.id ? "ring-2 ring-primary" : "bg-slate-100",
+                          selectedMed?.id === m.id
+                            ? "ring-2 ring-primary"
+                            : "bg-slate-100",
                         )}
                       >
                         {photoSrc ? (
-                          <img src={photoSrc} alt={m.name} className="h-full w-full object-cover" loading="lazy" />
+                          <img
+                            src={photoSrc}
+                            alt={m.name}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
                         ) : (
                           <Pill className="h-6 w-6 text-slate-400" />
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
                         <h3 className="truncate font-bold">{m.name}</h3>
-                        <p className="text-xs uppercase text-muted-foreground">{m.type || "médicament"}</p>
+                        <p className="text-xs uppercase text-muted-foreground">
+                          {m.type || "médicament"}
+                        </p>
                       </div>
                       <ChevronRight className="h-4 w-4 text-slate-300" />
                     </button>
@@ -394,15 +472,23 @@ export default function SearchMedications() {
                 })}
                 {query && medications.length === 0 && !loading && (
                   <div className="space-y-4 py-4">
-                    <p className="text-center text-muted-foreground">Aucun médicament trouvé.</p>
-                    {aiLoading && <p className="text-center text-muted-foreground">Recherche IA...</p>}
+                    <p className="text-center text-muted-foreground">
+                      Aucun médicament trouvé.
+                    </p>
+                    {aiLoading && (
+                      <p className="text-center text-muted-foreground">
+                        Recherche IA...
+                      </p>
+                    )}
                     {aiResult && (
                       <div className="space-y-3 rounded-3xl border border-violet-100 bg-violet-50 p-6 text-left">
                         <div className="inline-flex items-center rounded-full bg-violet-100 px-3 py-1 text-xs font-bold uppercase text-violet-700">
                           Résultat IA
                         </div>
                         <h3 className="text-xl font-bold">{aiResult.name}</h3>
-                        <p className="text-sm text-muted-foreground">{aiResult.description}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {aiResult.description}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -428,7 +514,9 @@ export default function SearchMedications() {
                         <div className="mb-2 inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-primary">
                           {selectedMed.type || "médicament"}
                         </div>
-                        <h2 className="text-4xl font-extrabold">{selectedMed.name}</h2>
+                        <h2 className="text-4xl font-extrabold">
+                          {selectedMed.name}
+                        </h2>
                       </div>
                       <div className="flex gap-3">
                         <Button
@@ -436,13 +524,23 @@ export default function SearchMedications() {
                           size="icon"
                           className={cn(
                             "h-12 w-12 rounded-2xl",
-                            bookmarks.includes(selectedMed.id) && "border-amber-200 bg-amber-50 text-amber-500",
+                            bookmarks.includes(selectedMed.id) &&
+                              "border-amber-200 bg-amber-50 text-amber-500",
                           )}
                           onClick={() => toggleBookmark(selectedMed.id)}
                         >
-                          <Bookmark className={cn("h-5 w-5", bookmarks.includes(selectedMed.id) && "fill-current")} />
+                          <Bookmark
+                            className={cn(
+                              "h-5 w-5",
+                              bookmarks.includes(selectedMed.id) &&
+                                "fill-current",
+                            )}
+                          />
                         </Button>
-                        <Button className="h-12 rounded-2xl px-6 font-bold shadow-lg shadow-primary/20" onClick={handleAddToTreatment}>
+                        <Button
+                          className="h-12 rounded-2xl px-6 font-bold shadow-lg shadow-primary/20"
+                          onClick={handleAddToTreatment}
+                        >
                           <Plus className="mr-2 h-4 w-4" />
                           Ajouter au traitement
                         </Button>
@@ -456,7 +554,8 @@ export default function SearchMedications() {
                           Description
                         </div>
                         <p className="leading-relaxed text-muted-foreground">
-                          {selectedMed.description || "Aucune description disponible."}
+                          {selectedMed.description ||
+                            "Aucune description disponible."}
                         </p>
                       </div>
                       <div className="space-y-4">
@@ -466,14 +565,23 @@ export default function SearchMedications() {
                         </div>
                         {relevantInteractions.length > 0 ? (
                           relevantInteractions.map((inter, idx) => (
-                            <div key={idx} className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm">
-                              <p className="font-bold">Incompatibilité : {inter.med1Name} / {inter.med2Name}</p>
-                              <p className="mt-1 opacity-80">{inter.description}</p>
+                            <div
+                              key={idx}
+                              className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm"
+                            >
+                              <p className="font-bold">
+                                Incompatibilité : {inter.med1Name} /{" "}
+                                {inter.med2Name}
+                              </p>
+                              <p className="mt-1 opacity-80">
+                                {inter.description}
+                              </p>
                             </div>
                           ))
                         ) : (
                           <p className="text-sm text-muted-foreground">
-                            {selectedMed.precautions && selectedMed.precautions !== "aucune"
+                            {selectedMed.precautions &&
+                            selectedMed.precautions !== "aucune"
                               ? selectedMed.precautions
                               : "Aucune précaution spécifique enregistrée."}
                           </p>
@@ -494,8 +602,12 @@ export default function SearchMedications() {
               ) : (
                 <div className="flex h-[420px] flex-col items-center justify-center rounded-[40px] border border-dashed border-slate-200 bg-white p-12 text-center opacity-60">
                   <Pill className="mb-4 h-12 w-12 text-slate-300" />
-                  <p className="font-bold text-slate-600">Sélectionnez un médicament</p>
-                  <p className="text-sm text-slate-400">Consultez la fiche et les stocks disponibles.</p>
+                  <p className="font-bold text-slate-600">
+                    Sélectionnez un médicament
+                  </p>
+                  <p className="text-sm text-slate-400">
+                    Consultez la fiche et les stocks disponibles.
+                  </p>
                 </div>
               )}
             </div>
@@ -509,7 +621,9 @@ export default function SearchMedications() {
               onClick={() => setPharmacyTab("garde")}
               className={cn(
                 "flex-1 rounded-xl py-2.5 text-sm font-bold transition-all",
-                pharmacyTab === "garde" ? "bg-white text-amber-600 shadow" : "text-muted-foreground",
+                pharmacyTab === "garde"
+                  ? "bg-white text-amber-600 shadow"
+                  : "text-muted-foreground",
               )}
             >
               De garde ({pharmaciesOnDuty.length})
@@ -519,7 +633,9 @@ export default function SearchMedications() {
               onClick={() => setPharmacyTab("pharmacy")}
               className={cn(
                 "flex-1 rounded-xl py-2.5 text-sm font-bold transition-all",
-                pharmacyTab === "pharmacy" ? "bg-white text-primary shadow" : "text-muted-foreground",
+                pharmacyTab === "pharmacy"
+                  ? "bg-white text-primary shadow"
+                  : "text-muted-foreground",
               )}
             >
               Pharmacie ({pharmaciesNearby.length})
@@ -591,7 +707,9 @@ export default function SearchMedications() {
           ) : (
             <div className="flex flex-col gap-2">
               {pharmacyList.map((p, i) =>
-                pharmacyTab === "garde" ? renderGardeRow(p, i) : renderPharmacyRow(p, i),
+                pharmacyTab === "garde"
+                  ? renderGardeRow(p, i)
+                  : renderPharmacyRow(p, i),
               )}
             </div>
           )}

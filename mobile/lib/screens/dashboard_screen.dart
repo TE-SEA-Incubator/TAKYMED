@@ -103,6 +103,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                           const Text('Vos statistiques',
                               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
                           const SizedBox(height: 14),
+                          // Ligne 1 : toujours visible (3 cartes)
                           Row(children: [
                             StatCard(label: 'Observance', value: '${_data!['stats']['observanceRate']}%', icon: Icons.check_circle_rounded, color: AppColors.success),
                             const SizedBox(width: 12),
@@ -110,27 +111,52 @@ class _DashboardScreenState extends State<DashboardScreen>
                             const SizedBox(width: 12),
                             StatCard(label: 'Planifiés', value: '${_data!['stats']['plannedReminders']}', icon: Icons.event_note_rounded, color: AppColors.primary),
                           ]),
+                          // Ligne 2 : uniquement pour professional, pharmacist et admin (3 cartes supplémentaires)
+                          Builder(builder: (_) {
+                            final userType = Provider.of<AuthProvider>(context, listen: false).user?.type ?? '';
+                            final isExtended = userType == 'professional' || userType == 'pharmacist' || userType == 'admin';
+                            if (!isExtended) return const SizedBox.shrink();
+                            return Column(
+                              children: [
+                                const SizedBox(height: 12),
+                                Row(children: [
+                                  StatCard(
+                                    label: 'Pharmacies',
+                                    value: '${_data!['stats']['nearbyPharmacies'] ?? 0}',
+                                    icon: Icons.local_pharmacy_rounded,
+                                    color: AppColors.secondary,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  StatCard(
+                                    label: 'En retard',
+                                    value: '${_data!['stats']['overdueReminders'] ?? 0}',
+                                    icon: Icons.warning_amber_rounded,
+                                    color: AppColors.destructive,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  StatCard(
+                                    label: 'De garde',
+                                    value: '${_data!['stats']['pharmaciesOnDuty'] ?? 0}',
+                                    icon: Icons.nightlight_round,
+                                    color: const Color(0xFF6366F1),
+                                  ),
+                                ]),
+                              ],
+                            );
+                          }),
                         ],
                       ),
                     ),
                     const SizedBox(height: 20),
                     AnimatedFadeSlide(
                       index: 1,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Quotas',
-                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                          const SizedBox(height: 14),
-                          QuotaSection(
-                            ordonnances: QuotaInfo.fromMap(
-                              (_data!['stats']['quota'] as Map<String, dynamic>?)?['ordonnances'] as Map<String, dynamic>?,
-                            ),
-                            rappels: QuotaInfo.fromMap(
-                              (_data!['stats']['quota'] as Map<String, dynamic>?)?['rappels'] as Map<String, dynamic>?,
-                            ),
-                          ),
-                        ],
+                      child: QuotaSection(
+                        ordonnances: QuotaInfo.fromMap(
+                          (_data!['stats']['quota'] as Map<String, dynamic>?)?['ordonnances'] as Map<String, dynamic>?,
+                        ),
+                        rappels: QuotaInfo.fromMap(
+                          (_data!['stats']['quota'] as Map<String, dynamic>?)?['rappels'] as Map<String, dynamic>?,
+                        ),
                       ),
                     ),
                   ],

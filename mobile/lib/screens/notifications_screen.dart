@@ -102,6 +102,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     final api = Provider.of<ApiService>(context, listen: false);
                                     try {
                                       await api.deleteNotification(auth.user!.id, id);
+                                      if (!mounted) return;
                                       setState(() {
                                         _notifications.removeAt(index);
                                       });
@@ -109,6 +110,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                         const SnackBar(content: Text('Notification supprimée')),
                                       );
                                     } catch (e) {
+                                      if (!mounted) return;
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(content: Text('Erreur : $e')),
                                       );

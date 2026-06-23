@@ -21,11 +21,12 @@ class NotificationService {
     tz.initializeTimeZones();
     tz.setLocalLocation(tz.getLocation('Africa/Douala'));
 
-    const androidSettings = AndroidInitializationSettings('@drawable/splash_logo');
+    // Android : utiliser l'icône launcher comme icône de notification
+    const androidSettings = AndroidInitializationSettings('@mipmap/launcher_icon');
     const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: false,
-      requestBadgePermission: false,
-      requestSoundPermission: false,
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
     );
 
     await flutterLocalNotificationsPlugin.initialize(
@@ -39,6 +40,9 @@ class NotificationService {
       final android = flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
 
+      // Demander la permission de notification (Android 13+)
+      await android?.requestNotificationsPermission();
+
       await android?.createNotificationChannel(const AndroidNotificationChannel(
         reminderChannelId,
         'Rappels médicaments',
@@ -46,6 +50,7 @@ class NotificationService {
         importance: Importance.max,
         playSound: true,
         enableVibration: true,
+        showBadge: true,
       ));
 
       await android?.createNotificationChannel(const AndroidNotificationChannel(
@@ -55,6 +60,7 @@ class NotificationService {
         importance: Importance.high,
         playSound: true,
         enableVibration: true,
+        showBadge: true,
       ));
     }
 
@@ -99,12 +105,22 @@ class NotificationService {
           fullScreenIntent: true,
           visibility: NotificationVisibility.public,
           ticker: 'Rappel TAKYMED',
+          icon: '@mipmap/launcher_icon',
+          largeIcon: const DrawableResourceAndroidBitmap('@mipmap/launcher_icon'),
           styleInformation: BigTextStyleInformation(body),
+          ongoing: false,
+          autoCancel: true,
+          playSound: true,
+          enableVibration: true,
+          // Heads-up notification (bandeau en haut de l'écran)
+          channelShowBadge: true,
         ),
         iOS: const DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
+          presentBanner: true,
+          presentList: true,
           interruptionLevel: InterruptionLevel.timeSensitive,
           categoryIdentifier: 'TAKYMED_REMINDER',
         ),
@@ -119,12 +135,21 @@ class NotificationService {
         importance: Importance.high,
         priority: Priority.high,
         category: AndroidNotificationCategory.message,
+        icon: '@mipmap/launcher_icon',
+        largeIcon: const DrawableResourceAndroidBitmap('@mipmap/launcher_icon'),
         styleInformation: BigTextStyleInformation(body),
+        autoCancel: true,
+        playSound: true,
+        enableVibration: true,
+        channelShowBadge: true,
+        visibility: NotificationVisibility.public,
       ),
       iOS: const DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
+        presentBanner: true,
+        presentList: true,
         categoryIdentifier: 'TAKYMED_MESSAGE',
       ),
     );

@@ -51,7 +51,10 @@ async function fetchHtml(url: string): Promise<string> {
 }
 
 /** Extraction heuristique HTML avec Cheerio (équivalent BeautifulSoup). */
-export function parsePharmaciesFromHtml(html: string, ville: string): ScrapedPharmacy[] {
+export function parsePharmaciesFromHtml(
+  html: string,
+  ville: string,
+): ScrapedPharmacy[] {
   const $ = cheerio.load(html);
   const pharmacies: ScrapedPharmacy[] = [];
   const seen = new Set<string>();
@@ -79,7 +82,10 @@ export function parsePharmaciesFromHtml(html: string, ville: string): ScrapedPha
     });
 
     if (!name) {
-      const lines = text.split(/\n/).map((line) => line.trim()).filter(Boolean);
+      const lines = text
+        .split(/\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
       for (const line of lines) {
         if (line.toLowerCase().includes("pharmac") && line.length < 120) {
           name = line;
@@ -92,13 +98,19 @@ export function parsePharmaciesFromHtml(html: string, ville: string): ScrapedPha
       name = `Pharmacie de garde (${ville})`;
     }
 
-    const address = text.replace(PHONE_PATTERN, "").replace(/\s+/g, " ").trim().slice(0, 200) || ville;
+    const address =
+      text
+        .replace(PHONE_PATTERN, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 200) || ville;
     const key = `${name}|${phone}`;
     if (seen.has(key)) return;
     seen.add(key);
 
     const lower = text.toLowerCase();
-    const status = lower.includes("ferm") || lower.includes("closed") ? "fermée" : "ouverte";
+    const status =
+      lower.includes("ferm") || lower.includes("closed") ? "fermée" : "ouverte";
 
     pharmacies.push({
       name: name.slice(0, 255),
@@ -112,7 +124,10 @@ export function parsePharmaciesFromHtml(html: string, ville: string): ScrapedPha
 }
 
 /** Fallback Gemini si le parser HTML est insuffisant. */
-async function parseWithGemini(html: string, ville: string): Promise<ScrapedPharmacy[]> {
+async function parseWithGemini(
+  html: string,
+  ville: string,
+): Promise<ScrapedPharmacy[]> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return [];
 
@@ -124,13 +139,16 @@ HTML (extrait):
 ${html.slice(0, 25000)}`;
 
   const aiResponse = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: "application/json",
+        },
       }),
     },
   );
@@ -173,7 +191,9 @@ async function savePharmaciesToDb(
   geocode = true,
 ): Promise<number> {
   // On supprime les anciennes pharmacies de garde pour cette région dans la table unifiée
-  db.prepare("DELETE FROM Pharmacies WHERE est_garde = 1 AND region = ?").run(region);
+  db.prepare("DELETE FROM Pharmacies WHERE est_garde = 1 AND region = ?").run(
+    region,
+  );
 
   // Insertion dans la table unifiée
   const stmt = db.prepare(`
@@ -200,10 +220,14 @@ async function savePharmaciesToDb(
     }
 
     // Vérification de l'existence de l'utilisateur avant insertion
-    const user = db.prepare("SELECT id_utilisateur FROM Utilisateurs WHERE id_utilisateur = ?").get(21);
+    const user = db
+      .prepare(
+        "SELECT id_utilisateur FROM Utilisateurs WHERE id_utilisateur = ?",
+      )
+      .get(21);
     if (!user) {
-        console.error("Owner ID 21 not found, cannot insert pharmacy.");
-        continue;
+      console.error("Owner ID 21 not found, cannot insert pharmacy.");
+      continue;
     }
 
     // id_pharmacien est fixé à 21 (utilisateur valide) pour les pharmacies de garde
@@ -212,10 +236,12 @@ async function savePharmaciesToDb(
   }
 
   // Nettoyage des stocks orphelins (pharmacies qui n'existent plus)
-  db.prepare(`
-    DELETE FROM StockMedicamentsPharmacie 
+  db.prepare(
+    `
+    DELETE FROM StockMedicamentsPharmacie
     WHERE id_pharmacie NOT IN (SELECT id_pharmacie FROM Pharmacies)
-  `).run();
+  `,
+  ).run();
 
   return count;
 }
@@ -252,14 +278,22 @@ export async function scrapePharmaciesRegion(
     throw new Error(`Aucune pharmacie trouvée pour ${region}`);
   }
 
-  const saved = await savePharmaciesToDb(pharmacies, region, cfg.ville, cfg.url, geocode);
+  const saved = await savePharmaciesToDb(
+    pharmacies,
+    region,
+    cfg.ville,
+    cfg.url,
+    geocode,
+  );
   console.log(`  ✓ ${saved} pharmacies enregistrées pour ${region}`);
 
   return pharmacies;
 }
 
 /** Alias rétrocompatible — scrape et persiste une région. */
-export async function fetchPharmaciesOnDuty(region: string = "centre"): Promise<ScrapedPharmacy[]> {
+export async function fetchPharmaciesOnDuty(
+  region: string = "centre",
+): Promise<ScrapedPharmacy[]> {
   return scrapePharmaciesRegion(region);
 }
 

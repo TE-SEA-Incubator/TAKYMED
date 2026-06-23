@@ -93,40 +93,38 @@ class _OrdonnanceDetailPanelState extends State<OrdonnanceDetailPanel> {
     final poidsCtrl = TextEditingController(text: widget.ord['poids_patient']?.toString() ?? '');
     final catCtrl = TextEditingController(text: widget.ord['categorie_age']?.toString() ?? 'adulte');
 
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('Modifier l\'ordonnance', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-            const SizedBox(height: 16),
-            TextField(controller: titreCtrl, decoration: const InputDecoration(labelText: 'Titre')),
-            const SizedBox(height: 12),
-            TextField(controller: patientCtrl, decoration: const InputDecoration(labelText: 'Patient')),
-            const SizedBox(height: 12),
-            TextField(controller: poidsCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Poids (kg)')),
-            const SizedBox(height: 12),
-            TextField(controller: catCtrl, decoration: const InputDecoration(labelText: 'Catégorie d\'âge')),
-            const SizedBox(height: 20),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Enregistrer'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (saved != true) return;
-
+    bool saved = false;
     try {
+      saved = await showModalBottomSheet<bool>(
+            context: context,
+            isScrollControlled: true,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            builder: (ctx) => Padding(
+              padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text('Modifier l\'ordonnance', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+                  const SizedBox(height: 16),
+                  TextField(controller: titreCtrl, autofocus: true, decoration: const InputDecoration(labelText: 'Titre')),
+                  const SizedBox(height: 12),
+                  TextField(controller: patientCtrl, decoration: const InputDecoration(labelText: 'Patient')),
+                  const SizedBox(height: 12),
+                  TextField(controller: poidsCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Poids (kg)')),
+                  const SizedBox(height: 12),
+                  TextField(controller: catCtrl, decoration: const InputDecoration(labelText: 'Catégorie d\'âge')),
+                  const SizedBox(height: 20),
+                  FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Enregistrer')),
+                ],
+              ),
+            ),
+          ) == true;
+
+      if (!saved) return;
+
       await widget.api.updateOrdonnance(
         widget.ord['id'] as int,
         titreCtrl.text.trim(),
@@ -137,9 +135,12 @@ class _OrdonnanceDetailPanelState extends State<OrdonnanceDetailPanel> {
       );
       await _reloadDetails();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      titreCtrl.dispose();
+      patientCtrl.dispose();
+      poidsCtrl.dispose();
+      catCtrl.dispose();
     }
   }
 
@@ -149,61 +150,76 @@ class _OrdonnanceDetailPanelState extends State<OrdonnanceDetailPanel> {
     final daysCtrl = TextEditingController(text: '7');
     String freq = '1x';
 
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setModal) => Padding(
-          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('Ajouter un médicament', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-              const SizedBox(height: 16),
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Nom du médicament')),
-              const SizedBox(height: 12),
-              TextField(controller: doseCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Dose')),
-              const SizedBox(height: 12),
-              TextField(controller: daysCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Durée (jours)')),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: freq,
-                decoration: const InputDecoration(labelText: 'Fréquence'),
-                items: const [
-                  DropdownMenuItem(value: '1x', child: Text('1x / jour')),
-                  DropdownMenuItem(value: '2x', child: Text('2x / jour')),
-                  DropdownMenuItem(value: '3x', child: Text('3x / jour')),
-                  DropdownMenuItem(value: 'interval', child: Text('Intervalle')),
-                  DropdownMenuItem(value: 'prn', child: Text('Si besoin')),
-                ],
-                onChanged: (v) => setModal(() => freq = v ?? '1x'),
-              ),
-              const SizedBox(height: 20),
-              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Ajouter')),
-            ],
-          ),
-        ),
-      ),
-    );
+    bool ok = false;
+    String savedName = '';
+    int savedDose = 1;
+    int savedDays = 7;
+    String savedFreq = '1x';
 
-    if (ok != true || nameCtrl.text.trim().isEmpty) return;
+    try {
+      ok = await showModalBottomSheet<bool>(
+            context: context,
+            isScrollControlled: true,
+            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+            builder: (ctx) => StatefulBuilder(
+              builder: (_, setModal) => Padding(
+                padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('Ajouter un médicament', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+                    const SizedBox(height: 16),
+                    TextField(controller: nameCtrl, autofocus: true, decoration: const InputDecoration(labelText: 'Nom du médicament')),
+                    const SizedBox(height: 12),
+                    TextField(controller: doseCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Dose')),
+                    const SizedBox(height: 12),
+                    TextField(controller: daysCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Durée (jours)')),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: freq,
+                      decoration: const InputDecoration(labelText: 'Fréquence'),
+                      items: const [
+                        DropdownMenuItem(value: '1x', child: Text('1x / jour')),
+                        DropdownMenuItem(value: '2x', child: Text('2x / jour')),
+                        DropdownMenuItem(value: '3x', child: Text('3x / jour')),
+                        DropdownMenuItem(value: 'interval', child: Text('Intervalle')),
+                        DropdownMenuItem(value: 'prn', child: Text('Si besoin')),
+                      ],
+                      onChanged: (v) => setModal(() => freq = v ?? '1x'),
+                    ),
+                    const SizedBox(height: 20),
+                    FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Ajouter')),
+                  ],
+                ),
+              ),
+            ),
+          ) == true;
+
+      savedName = nameCtrl.text.trim();
+      savedDose = int.tryParse(doseCtrl.text) ?? 1;
+      savedDays = int.tryParse(daysCtrl.text) ?? 7;
+      savedFreq = freq;
+    } finally {
+      nameCtrl.dispose();
+      doseCtrl.dispose();
+      daysCtrl.dispose();
+    }
+
+    if (!ok || savedName.isEmpty) return;
 
     try {
       await widget.api.addMedicament(widget.ord['id'] as int, {
-        'medicamentName': nameCtrl.text.trim(),
-        'dose': int.tryParse(doseCtrl.text) ?? 1,
-        'type_frequence': freq,
-        'intervalle_heures': freq == 'interval' ? 8 : null,
-        'duree_jours': int.tryParse(daysCtrl.text) ?? 7,
+        'medicamentName': savedName,
+        'dose': savedDose,
+        'type_frequence': savedFreq,
+        'intervalle_heures': savedFreq == 'interval' ? 8 : null,
+        'duree_jours': savedDays,
         'times': ['08:00'],
       });
       await _reloadDetails();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
   }
 

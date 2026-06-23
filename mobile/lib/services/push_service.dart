@@ -44,10 +44,11 @@ class PushService {
 
   static Future<void> startPolling(ApiService api, int userId) async {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+    // Poll immédiat au démarrage, puis toutes les 15 secondes
+    await _pollAll(api, userId);
+    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) async {
       await _pollAll(api, userId);
     });
-    await _pollAll(api, userId);
     await ReminderScheduleService.syncFromServer(api, userId);
   }
 

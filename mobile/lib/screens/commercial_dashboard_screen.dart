@@ -73,24 +73,28 @@ class _CommercialDashboardScreenState extends State<CommercialDashboardScreen> {
   }
 
   Future<void> renameClient(int id, String currentName) async {
-    final newName = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        final controller = TextEditingController(text: currentName);
-        return AlertDialog(
+    final controller = TextEditingController(text: currentName);
+    String? newName;
+    try {
+      newName = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text('Renommer le client'),
           content: TextField(
             controller: controller,
+            autofocus: true,
             decoration: const InputDecoration(labelText: 'Nouveau nom'),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-            TextButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('OK')),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+            TextButton(onPressed: () => Navigator.pop(ctx, controller.text), child: const Text('OK')),
           ],
-        );
-      },
-    );
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
     if (newName == null || newName == currentName) return;
 
     final auth = Provider.of<AuthProvider>(context, listen: false);
@@ -134,13 +138,14 @@ class _CommercialDashboardScreenState extends State<CommercialDashboardScreen> {
 
   Future<void> sendMessage(int clientId, String clientName) async {
     final controller = TextEditingController();
-    final sent = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        bool sending = false;
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
+    bool sent = false;
+    try {
+      final result = await showDialog<bool>(
+        context: context,
+        builder: (ctx) {
+          bool sending = false;
+          return StatefulBuilder(
+            builder: (_, setDialogState) => AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               title: Text('Message à $clientName'),
               content: Column(
@@ -149,6 +154,7 @@ class _CommercialDashboardScreenState extends State<CommercialDashboardScreen> {
                   TextField(
                     controller: controller,
                     maxLines: 4,
+                    autofocus: true,
                     decoration: InputDecoration(
                       hintText: 'Votre message...',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
@@ -165,7 +171,7 @@ class _CommercialDashboardScreenState extends State<CommercialDashboardScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: sending ? null : () => Navigator.pop(context),
+                  onPressed: sending ? null : () => Navigator.pop(ctx),
                   child: const Text('Annuler'),
                 ),
                 TextButton(
@@ -173,31 +179,34 @@ class _CommercialDashboardScreenState extends State<CommercialDashboardScreen> {
                     if (controller.text.trim().isEmpty) return;
                     setDialogState(() => sending = true);
                     try {
-                      final auth = Provider.of<AuthProvider>(context, listen: false);
-                      final api = Provider.of<ApiService>(context, listen: false);
+                      final auth = Provider.of<AuthProvider>(ctx, listen: false);
+                      final api = Provider.of<ApiService>(ctx, listen: false);
                       await api.sendMessageToClient(auth.user!.id, clientId, controller.text.trim());
-                      if (mounted) Navigator.pop(context, true);
+                      if (ctx.mounted) Navigator.pop(ctx, true);
                     } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
                           SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
                         );
                         setDialogState(() => sending = false);
                       }
                     }
                   },
-                  child: sending 
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
-                    : const Text('Envoyer', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: sending
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Envoyer', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
-            );
-          }
-        );
-      },
-    );
+            ),
+          );
+        },
+      );
+      sent = result == true;
+    } finally {
+      controller.dispose();
+    }
 
-    if (sent == true && mounted) {
+    if (sent && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Message envoyé')));
     }
   }
