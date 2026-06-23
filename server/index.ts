@@ -76,6 +76,20 @@ export function createServer() {
     res.status(404).json({ error: "Endpoint API introuvable" });
   });
 
+  // Global Error Handlers
+  process.on("uncaughtException", (error) => {
+    console.error("❌ UNCAUGHT EXCEPTION:", error);
+    // On ne quitte pas le processus pour les erreurs réseau type ETIMEDOUT
+    if (!(error instanceof Error && (error as any).code === "ETIMEDOUT")) {
+      // Pour les autres erreurs critiques, on pourrait vouloir redémarrer
+      // process.exit(1);
+    }
+  });
+
+  process.on("unhandledRejection", (reason, promise) => {
+    console.error("❌ UNHANDLED REJECTION at:", promise, "reason:", reason);
+  });
+
   // Start services
   connectToWhatsApp().catch(err => console.error("WhatsApp Init Error:", err));
   startReminderWorker();

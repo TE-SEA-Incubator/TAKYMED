@@ -199,10 +199,23 @@ async function savePharmaciesToDb(
       await sleep(1100);
     }
 
-    // id_pharmacien est fixé à 1 pour les pharmacies de garde (admin)
-    stmt.run(1, name, phone, address, lat, lng, region);
+    // Vérification de l'existence de l'utilisateur avant insertion
+    const user = db.prepare("SELECT id_utilisateur FROM Utilisateurs WHERE id_utilisateur = ?").get(21);
+    if (!user) {
+        console.error("Owner ID 21 not found, cannot insert pharmacy.");
+        continue;
+    }
+
+    // id_pharmacien est fixé à 21 (utilisateur valide) pour les pharmacies de garde
+    stmt.run(21, name, phone, address, lat, lng, region);
     count += 1;
   }
+
+  // Nettoyage des stocks orphelins (pharmacies qui n'existent plus)
+  db.prepare(`
+    DELETE FROM StockMedicamentsPharmacie 
+    WHERE id_pharmacie NOT IN (SELECT id_pharmacie FROM Pharmacies)
+  `).run();
 
   return count;
 }

@@ -52,23 +52,25 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       floatingActionButton: FloatingActionButton(
         onPressed: () => pushSlide(context, const CreatePrescriptionScreen()),
         backgroundColor: AppColors.primary,
-        elevation: 4,
+        elevation: 6,
         shape: const CircleBorder(),
-        child: const Icon(Icons.add, size: 32, color: Colors.white),
+        child: const Icon(Icons.add, size: 30, color: Colors.white),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(),
-        notchMargin: 8,
+        notchMargin: 10,
         color: AppColors.surface,
+        elevation: 8,
+        shadowColor: Colors.black12,
         child: SizedBox(
-          height: 60,
+          height: 62,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               Expanded(child: _NavItem(icon: _tabs[0].icon, label: _tabs[0].label, isSelected: _currentIndex == 0, onTap: () => _onTabTap(0))),
               Expanded(child: _NavItem(icon: _tabs[1].icon, label: _tabs[1].label, isSelected: _currentIndex == 1, onTap: () => _onTabTap(1))),
-              const SizedBox(width: 40), // Space for FAB
+              const SizedBox(width: 56), // espace FAB
               Expanded(child: _NavItem(icon: _tabs[2].icon, label: _tabs[2].label, isSelected: _currentIndex == 2, onTap: () => _onTabTap(2))),
               Expanded(child: _NavItem(icon: _tabs[3].icon, label: _tabs[3].label, isSelected: _currentIndex == 3, onTap: () => _onTabTap(3))),
             ],
